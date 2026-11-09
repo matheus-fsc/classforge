@@ -73,7 +73,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if (engineer != null) engineer.save();
+        if (engineer != null) { engineer.save(); engineer.clearTags(); }
         savePlayers();
     }
 

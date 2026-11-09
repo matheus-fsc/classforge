@@ -47,11 +47,13 @@ final class Engineer implements Listener {
     static final int[] COOLDOWN = {20, 17, 14, 12, 10}; // ticks entre tiros
     static final int MAX_POWER_DEVICES = 10;
     static final double SHOT_COST = 4;
+    static final double FIREBALL_COST = 8;
     static final double LINK_RANGE = 12;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
-        double energy; int burn; long nextShot;
+        double energy, lastRate; int burn; long nextShot;
+        TextDisplay tag;
         Device(String type, String world, int x, int y, int z, UUID owner) {
             this.type = type; this.world = world; this.x = x; this.y = y; this.z = z; this.owner = owner;
         }
@@ -128,7 +130,7 @@ final class Engineer implements Listener {
         Material mat; String name; List<String> lore;
         switch (type) {
             case "bancada" -> { mat = Material.SMITHING_TABLE; name = "Bancada de Engenharia"; lore = List.of("Clique com o direito para montar dispositivos.", "So engenheiros conseguem usar."); }
-            case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas guardadas nela em mobs hostis.", "Gasta " + (int) SHOT_COST + " de energia por tiro.", "Precisa de gerador ou bateria a ate " + (int) LINK_RANGE + " blocos."); }
+            case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas ou bolas de fogo guardadas nela", "em mobs hostis. Flecha gasta " + (int) SHOT_COST + " de energia,", "bola de fogo gasta " + (int) FIREBALL_COST + ".", "Precisa de gerador ou bateria a ate " + (int) LINK_RANGE + " blocos."); }
             case "carvao" -> { mat = Material.FURNACE; name = "Gerador a Carvao"; lore = List.of("Coloque carvao no espaco de combustivel.", "Funil pela lateral tambem abastece.", "4 energia/s enquanto queima."); }
             case "geotermico" -> { mat = Material.MAGMA_BLOCK; name = "Gerador Geotermico"; lore = List.of("0.5 energia/s por fonte de lava encostada.", "Dobro no Nether. Nunca para."); }
             case "solar" -> { mat = Material.DAYLIGHT_DETECTOR; name = "Painel Solar"; lore = List.of("1.5 energia/s de dia com ceu aberto.", "Nao gera a noite."); }
@@ -204,12 +206,13 @@ final class Engineer implements Listener {
         }
         devices.put(d.key(), d);
         p.sendMessage(Component.text("⚙ " + label(type) + " instalado.", NamedTextColor.GOLD));
-        if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas dentro dela e um gerador ou bateria a ate " + (int) LINK_RANGE + " blocos.", NamedTextColor.GRAY));
+        if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e um gerador ou bateria a ate " + (int) LINK_RANGE + " blocos.", NamedTextColor.GRAY));
     }
 
     /** Remove o dispositivo: derruba o conteudo, o item customizado e vira ar. */
     private void breakDevice(Block b, Device d, boolean dropItem) {
         devices.remove(d.key());
+        removeTag(d);
         BlockState st = b.getState();
         if (st instanceof Container c) {
             for (ItemStack it : c.getInventory().getContents())
@@ -271,11 +274,17 @@ final class Engineer implements Listener {
             case "bateria", "geotermico", "solar" -> {
                 e.setCancelled(true);
                 p.sendActionBar(Component.text(label(d.type) + ": " + (int) d.energy + "/" + (int) d.cap() + " energia" + rateText(d, e.getClickedBlock()), NamedTextColor.GOLD));
+                showRange(p, d, LINK_RANGE, Color.fromRGB(255, 200, 40));
             }
-            case "carvao" -> p.sendActionBar(Component.text("Gerador: " + (int) d.energy + "/" + (int) d.cap() + " energia, queimando " + d.burn + "s", NamedTextColor.GOLD));
+            case "carvao" -> {
+                p.sendActionBar(Component.text("Gerador: " + (int) d.energy + "/" + (int) d.cap() + " energia, queimando " + d.burn + "s", NamedTextColor.GOLD));
+                showRange(p, d, LINK_RANGE, Color.fromRGB(255, 200, 40));
+            }
             case "torre" -> {
                 World w = e.getClickedBlock().getWorld();
-                p.sendActionBar(Component.text("Torre (nivel " + plugin.level(d.owner) + "): " + (int) networkEnergy(d, w) + " energia na rede, " + arrows(e.getClickedBlock()) + " flechas", NamedTextColor.GOLD));
+                int[] am = ammo(e.getClickedBlock());
+                p.sendActionBar(Component.text("Torre (nivel " + plugin.level(d.owner) + "): " + (int) networkEnergy(d, w) + " energia na rede, " + am[0] + " flechas, " + am[1] + " bolas de fogo", NamedTextColor.GOLD));
+                showRange(p, d, RANGE[plugin.level(d.owner) - 1], Color.fromRGB(230, 60, 40));
             }
         }
     }
@@ -386,7 +395,7 @@ final class Engineer implements Listener {
                 "Geradores enchem as baterias proximas.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
-                "Coloque flechas dentro da torre", "ou abasteca com funil.",
+                "Flechas ou bolas de fogo dentro da torre,", "ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
                 "Aceita flecha com efeito e espectral.", "Nunca acerta jogador, pet ou animal."));
         inv.setItem(52, icon(Material.ENDER_EYE, "Trocar de classe", NamedTextColor.LIGHT_PURPLE,
                 "Custa " + BabylonClasses.CHANGE_COST_LEVELS + " niveis de XP.", "Zera o nivel da classe."));
@@ -512,7 +521,7 @@ final class Engineer implements Listener {
             World w = Bukkit.getWorld(d.world);
             if (!loaded(d, w)) continue;
             Block b = w.getBlockAt(d.x, d.y, d.z);
-            if (!valid(d, b)) { it.remove(); continue; }
+            if (!valid(d, b)) { it.remove(); removeTag(d); continue; }
             if (d.type.equals("bateria")) { batts.add(d); continue; }
             if (d.type.equals("carvao")) {
                 if (d.burn > 0) d.burn--;
@@ -525,9 +534,14 @@ final class Engineer implements Listener {
                         d.burn = secs;
                     }
                 }
-                if (d.burn > 0) w.spawnParticle(Particle.SMOKE, d.x + 0.5, d.y + 1.1, d.z + 0.5, 2, 0.15, 0.05, 0.15, 0.01);
+                if (d.burn > 0 && b.getState() instanceof org.bukkit.block.Furnace fresh && fresh.getBurnTime() < 30) {
+                    // mantem a fornalha acesa (chama e luz vanilla) enquanto o gerador queima
+                    fresh.setBurnTime((short) 40);
+                    fresh.update(true, false);
+                }
             }
-            d.energy = Math.min(d.cap(), d.energy + rate(d, b));
+            d.lastRate = rate(d, b);
+            d.energy = Math.min(d.cap(), d.energy + d.lastRate);
             gens.add(d);
         }
         // geradores despejam o excedente nas baterias proximas
@@ -541,6 +555,7 @@ final class Engineer implements Listener {
                 if (g.energy <= 0) break;
             }
         }
+        updateTags();
     }
 
     private static double dist2(Device a, Device b) {
@@ -577,13 +592,19 @@ final class Engineer implements Listener {
 
     // ---------- torres ----------
 
-    private int arrows(Block b) {
-        if (!(b.getState() instanceof Container c)) return 0;
-        int n = 0;
-        for (ItemStack it : c.getInventory().getContents())
-            if (it != null && isArrow(it.getType())) n += it.getAmount();
+    /** {flechas, bolas de fogo} */
+    private int[] ammo(Block b) {
+        int[] n = new int[2];
+        if (!(b.getState() instanceof Container c)) return n;
+        for (ItemStack it : c.getInventory().getContents()) {
+            if (it == null) continue;
+            if (isArrow(it.getType())) n[0] += it.getAmount();
+            else if (it.getType() == Material.FIRE_CHARGE) n[1] += it.getAmount();
+        }
         return n;
     }
+
+    private static boolean isAmmo(Material m) { return isArrow(m) || m == Material.FIRE_CHARGE; }
 
     private static boolean isArrow(Material m) { return m == Material.ARROW || m == Material.TIPPED_ARROW || m == Material.SPECTRAL_ARROW; }
 
@@ -604,17 +625,25 @@ final class Engineer implements Listener {
             World w = Bukkit.getWorld(t.world);
             if (!loaded(t, w)) continue;
             Block b = w.getBlockAt(t.x, t.y, t.z);
-            if (!valid(t, b)) { it.remove(); continue; }
+            if (!valid(t, b)) { it.remove(); removeTag(t); continue; }
             int lvl = plugin.level(t.owner);
             int range = RANGE[lvl - 1];
             Location c = t.center(w);
+
+            if (!(b.getState() instanceof Container cont)) continue;
+            ItemStack ammo = null; int slot = -1;
+            ItemStack[] inv = cont.getInventory().getContents();
+            for (int i = 0; i < inv.length; i++) if (inv[i] != null && isAmmo(inv[i].getType())) { ammo = inv[i]; slot = i; break; }
+            if (ammo == null) { t.nextShot = tick + 40; continue; }
+            boolean fireball = ammo.getType() == Material.FIRE_CHARGE;
+            double speed = fireball ? 1.8 : 2.6;
 
             LivingEntity best = null; Vector bestAim = null; double bestD = Double.MAX_VALUE;
             for (Entity en : w.getNearbyEntities(c, range, range, range)) {
                 if (!(en instanceof LivingEntity le) || !hostile(le)) continue;
                 double dd = le.getLocation().distanceSquared(c);
                 if (dd > range * range || dd >= bestD) continue;
-                Vector aim = aimPoint(le, c);
+                Vector aim = aimPoint(le, c, speed, !fireball);
                 Vector dir = aim.clone().subtract(c.toVector());
                 if (dir.lengthSquared() < 0.01) continue;
                 Location muzzle = c.clone().add(dir.clone().normalize().multiply(0.8));
@@ -624,26 +653,26 @@ final class Engineer implements Listener {
                 best = le; bestAim = aim; bestD = dd;
             }
             if (best == null) continue;
-            if (!(b.getState() instanceof Container cont)) continue;
-            ItemStack ammo = null; int slot = -1;
-            ItemStack[] inv = cont.getInventory().getContents();
-            for (int i = 0; i < inv.length; i++) if (inv[i] != null && isArrow(inv[i].getType())) { ammo = inv[i]; slot = i; break; }
-            if (ammo == null) { t.nextShot = tick + 40; continue; }
-            if (!drain(t, SHOT_COST)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
+            if (!drain(t, fireball ? FIREBALL_COST : SHOT_COST)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
 
             ItemStack shot = ammo.clone(); shot.setAmount(1);
             ammo.setAmount(ammo.getAmount() - 1);
             cont.getInventory().setItem(slot, ammo.getAmount() > 0 ? ammo : null);
 
             int shots = lvl >= 5 ? 2 : 1;
-            for (int s = 0; s < shots; s++) fire(w, c, bestAim, shot, t, lvl, s == 0 ? 0.4f : 2.5f);
-            w.playSound(c, Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.4f);
+            if (fireball) {
+                for (int s = 0; s < shots; s++) fireball(w, c, bestAim, t, s == 0 ? 0 : 0.08);
+                w.playSound(c, Sound.ITEM_FIRECHARGE_USE, 0.7f, 1.2f);
+            } else {
+                for (int s = 0; s < shots; s++) fire(w, c, bestAim, shot, t, lvl, s == 0 ? 0.4f : 2.5f);
+                w.playSound(c, Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.4f);
+            }
             t.nextShot = tick + COOLDOWN[lvl - 1];
         }
     }
 
     /** Mira na frente do alvo (velocidade medida entre scans) e compensa a queda da flecha. */
-    private Vector aimPoint(LivingEntity le, Location from) {
+    private Vector aimPoint(LivingEntity le, Location from, double speed, boolean gravity) {
         Location l = le.getLocation();
         Vector target = l.toVector().add(new Vector(0, le.getHeight() * 0.55, 0));
         double[] prev = lastPos.get(le.getUniqueId());
@@ -655,9 +684,9 @@ final class Engineer implements Listener {
         }
         lastPos.put(le.getUniqueId(), new double[]{l.getX(), l.getY(), l.getZ(), tick});
         double dist = target.distance(from.toVector());
-        double ticks = dist / 2.6;
+        double ticks = dist / speed;
         target.add(vel.multiply(ticks));
-        target.setY(target.getY() + 0.025 * ticks * ticks);
+        if (gravity) target.setY(target.getY() + 0.025 * ticks * ticks);
         return target;
     }
 
@@ -678,20 +707,125 @@ final class Engineer implements Listener {
         a.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
     }
 
-    /** Flecha da torre nao fere jogador, pet, aldeao nem animal. */
+    private void fireball(World w, Location c, Vector aim, Device t, double jitter) {
+        Vector dir = aim.clone().subtract(c.toVector()).normalize();
+        if (jitter > 0) dir.add(new Vector(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiply(jitter)).normalize();
+        Location muzzle = c.clone().add(dir.clone().multiply(0.9));
+        muzzle.setDirection(dir);
+        Vector d2 = dir.clone();
+        w.spawn(muzzle, SmallFireball.class, f -> {
+            f.setIsIncendiary(false); // nao poe fogo em blocos da base
+            f.setDirection(d2);
+            f.setVelocity(d2.clone().multiply(1.8));
+            f.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+        });
+    }
+
+    private boolean fromTurret(Entity damager) {
+        return damager instanceof Projectile pr && pr.getPersistentDataContainer().has(arrowKey, PersistentDataType.STRING);
+    }
+
+    /** Projetil da torre nao fere jogador, pet, aldeao nem animal. */
     @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
     public void onArrowHit(EntityDamageByEntityEvent e) {
-        if (!(e.getDamager() instanceof AbstractArrow a) || !a.getPersistentDataContainer().has(arrowKey, PersistentDataType.STRING)) return;
+        if (!fromTurret(e.getDamager())) return;
         if (e.getEntity() instanceof LivingEntity le && le instanceof Enemy) return;
         e.setCancelled(true);
-        a.remove();
+        e.getDamager().remove();
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+    public void onTurretIgnite(org.bukkit.event.entity.EntityCombustByEntityEvent e) {
+        if (fromTurret(e.getCombuster()) && !(e.getEntity() instanceof Enemy)) e.setCancelled(true);
+    }
+
+    // ---------- etiquetas flutuantes ----------
+
+    void removeTag(Device d) {
+        if (d.tag != null) { d.tag.remove(); d.tag = null; }
+    }
+
+    void clearTags() { for (Device d : devices.values()) removeTag(d); }
+
+    private static String bar(double v, double max) {
+        int n = (int) Math.round(10 * Math.max(0, Math.min(1, v / max)));
+        return "|".repeat(n) + ".".repeat(10 - n);
+    }
+
+    private Component tagText(Device d, Block b, World w) {
+        Component name = Component.text(label(d.type), NamedTextColor.GOLD, TextDecoration.BOLD);
+        Component nl = Component.newline();
+        NamedTextColor g = NamedTextColor.GRAY;
+        switch (d.type) {
+            case "bancada" -> { return name; }
+            case "torre" -> {
+                int lvl = plugin.level(d.owner);
+                int[] am = ammo(b);
+                double net = networkEnergy(d, w);
+                Component state;
+                if (am[0] + am[1] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (net < SHOT_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
+                else state = Component.text("⚡ " + (int) net + " na rede", NamedTextColor.YELLOW);
+                return name.append(nl).append(Component.text("Nivel " + lvl + "  •  alcance " + RANGE[lvl - 1], g))
+                        .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo", NamedTextColor.WHITE))
+                        .append(nl).append(state);
+            }
+            default -> {
+                Component line = Component.text("⚡ " + (int) d.energy + "/" + (int) d.cap() + "  ", NamedTextColor.YELLOW)
+                        .append(Component.text(bar(d.energy, d.cap()), d.energy > 0 ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY));
+                Component out = name.append(nl).append(line);
+                if (!d.type.equals("bateria")) {
+                    out = out.append(nl).append(d.lastRate > 0
+                            ? Component.text(String.format(Locale.ROOT, "+%.1f/s", d.lastRate), NamedTextColor.GREEN)
+                            : Component.text(d.type.equals("carvao") ? "sem combustivel" : "parado", NamedTextColor.RED));
+                    if (d.type.equals("carvao") && d.burn > 0) out = out.append(Component.text("  (" + d.burn + "s)", g));
+                }
+                return out.append(nl).append(Component.text("alcance " + (int) LINK_RANGE + " blocos", g));
+            }
+        }
+    }
+
+    private void updateTags() {
+        for (Device d : devices.values()) {
+            World w = Bukkit.getWorld(d.world);
+            if (!loaded(d, w)) { d.tag = null; continue; }
+            Block b = w.getBlockAt(d.x, d.y, d.z);
+            Component text = tagText(d, b, w);
+            if (d.tag == null || !d.tag.isValid()) {
+                double h = d.type.equals("solar") ? 0.9 : 1.55;
+                d.tag = w.spawn(new Location(w, d.x + 0.5, d.y + h, d.z + 0.5), TextDisplay.class, td -> {
+                    td.setPersistent(false);
+                    td.setBillboard(Display.Billboard.CENTER);
+                    td.setShadowed(true);
+                    td.setViewRange(0.35f);
+                    td.setBackgroundColor(Color.fromARGB(90, 0, 0, 0));
+                    td.setAlignment(TextDisplay.TextAlignment.CENTER);
+                    td.text(text);
+                });
+            } else d.tag.text(text);
+        }
+    }
+
+    /** Desenha um circulo de particulas so para o jogador, por 3 segundos. */
+    private void showRange(Player p, Device d, double r, Color color) {
+        Particle.DustOptions dust = new Particle.DustOptions(color, 1.3f);
+        int points = (int) (r * 7);
+        for (int k = 0; k < 3; k++) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!p.isOnline()) return;
+                for (int i = 0; i < points; i++) {
+                    double a = 2 * Math.PI * i / points;
+                    p.spawnParticle(Particle.DUST, d.x + 0.5 + Math.cos(a) * r, d.y + 0.6, d.z + 0.5 + Math.sin(a) * r, 1, 0, 0, 0, 0, dust);
+                }
+            }, k * 20L);
+        }
     }
 
     @EventHandler
     public void onKill(EntityDeathEvent e) {
         lastPos.remove(e.getEntity().getUniqueId());
         if (!(e.getEntity().getLastDamageCause() instanceof EntityDamageByEntityEvent ed)) return;
-        if (!(ed.getDamager() instanceof AbstractArrow a)) return;
+        if (!(ed.getDamager() instanceof Projectile a)) return;
         String owner = a.getPersistentDataContainer().get(arrowKey, PersistentDataType.STRING);
         if (owner == null) return;
         try { plugin.addXp(UUID.fromString(owner), 1); } catch (IllegalArgumentException ignored) { }
