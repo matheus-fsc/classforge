@@ -39,34 +39,40 @@ import java.util.*;
 /** Engenheiro: bancada, torres sentinela, geradores (carvao, geotermico, solar) e bateria. */
 final class Engineer implements Listener {
 
-    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "bateria"};
+    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo"};
 
     // por nivel 1..5
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
     static final int[] RANGE = {12, 14, 16, 18, 20};
     static final int[] COOLDOWN = {20, 17, 14, 12, 10}; // ticks entre tiros
-    static final int MAX_POWER_DEVICES = 10;
-    static final double SHOT_COST = 4;
-    static final double FIREBALL_COST = 8;
-    static final double LINK_RANGE = 12;
+    static final int MAX_POWER_DEVICES = 16;
+    static final double SHOT_COST = 5;
+    static final double FIREBALL_COST = 10;
+    /** Manutencao da torre ligada, por segundo, mesmo sem atirar. Sobe com o nivel (2.0 ate 3.0). */
+    static double upkeep(int lvl) { return 2.0 + 0.25 * (lvl - 1); }
+    static final double INVERTER_RATE = 8;     // energia/s que um inversor converte
+    static final double INVERTER_EFF = 0.9;
+    static final int MAX_NET_NODES = 4096;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
-        double energy, lastRate; int burn; long nextShot;
+        double energy, lastRate; int burn; long nextShot; boolean powered;
         TextDisplay tag;
-        boolean tagOn = true; int filter = 0b111111; int prio; int ammoPref;
+        boolean tagOn = true, enabled = true; int filter = 0b111111; int prio; int ammoPref; int mode;
         Device(String type, String world, int x, int y, int z, UUID owner) {
             this.type = type; this.world = world; this.x = x; this.y = y; this.z = z; this.owner = owner;
         }
         String key() { return world + ":" + x + ":" + y + ":" + z; }
         Location center(World w) { return new Location(w, x + 0.5, y + 0.5, z + 0.5); }
         double cap() {
-            return switch (type) { case "carvao" -> 400; case "geotermico", "solar" -> 200; case "bateria" -> 5000; default -> 0; };
+            return switch (type) { case "carvao", "inversor" -> 400; case "geotermico", "solar" -> 200; case "bateria" -> 5000; default -> 0; };
         }
         boolean isSource() { return cap() > 0; }
     }
 
-    record Recipe(String type, int minLevel, Map<Material, Integer> cost) { }
+    record Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount) {
+        Recipe(String type, int minLevel, Map<Material, Integer> cost) { this(type, minLevel, cost, 1); }
+    }
 
     private final BabylonClasses plugin;
     private final NamespacedKey devKey, arrowKey, recipeKey;
@@ -74,6 +80,7 @@ final class Engineer implements Listener {
     private final Map<UUID, double[]> lastPos = new HashMap<>(); // x, y, z, tick
     private final File file;
     private long tick;
+    private int powerTicks;
     private EnergyFx fx;
     private final List<Recipe> recipes = new ArrayList<>();
 
@@ -86,6 +93,8 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.BOW, 1, Material.IRON_INGOT, 4, Material.REDSTONE, 4)));
         recipes.add(new Recipe("carvao", 1, costs(Material.FURNACE, 1, Material.IRON_INGOT, 4, Material.COPPER_INGOT, 2, Material.REDSTONE, 2)));
         recipes.add(new Recipe("solar", 1, costs(Material.DAYLIGHT_DETECTOR, 1, Material.COPPER_INGOT, 4, Material.GLASS, 2, Material.REDSTONE, 2)));
+        recipes.add(new Recipe("inversor", 1, costs(Material.COPPER_INGOT, 4, Material.REDSTONE, 2, Material.GOLD_INGOT, 1, Material.IRON_INGOT, 1)));
+        recipes.add(new Recipe("cabo", 1, costs(Material.COPPER_INGOT, 2), 8));
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.COPPER_INGOT, 4, Material.IRON_INGOT, 2, Material.GOLD_INGOT, 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.COPPER_INGOT, 6, Material.REDSTONE_BLOCK, 1, Material.IRON_INGOT, 2)));
     }
@@ -133,11 +142,13 @@ final class Engineer implements Listener {
         Material mat; String name; List<String> lore;
         switch (type) {
             case "bancada" -> { mat = Material.SMITHING_TABLE; name = "Bancada de Engenharia"; lore = List.of("Clique com o direito para montar dispositivos.", "So engenheiros conseguem usar."); }
-            case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas ou bolas de fogo guardadas nela", "em mobs hostis. Flecha gasta " + (int) SHOT_COST + " de energia,", "bola de fogo gasta " + (int) FIREBALL_COST + ".", "Precisa de gerador ou bateria a ate " + (int) LINK_RANGE + " blocos."); }
+            case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas ou bolas de fogo guardadas nela", "em mobs hostis. Ligada, consome " + upkeep(1) + "/s", "mesmo parada; cada flecha gasta mais " + (int) SHOT_COST + ",", "bola de fogo " + (int) FIREBALL_COST + ". Ligue com cabos."); }
             case "carvao" -> { mat = Material.FURNACE; name = "Gerador a Carvao"; lore = List.of("Coloque carvao no espaco de combustivel.", "Funil pela lateral tambem abastece.", "4 energia/s enquanto queima."); }
             case "geotermico" -> { mat = Material.MAGMA_BLOCK; name = "Gerador Geotermico"; lore = List.of("0.5 energia/s por fonte de lava encostada.", "Dobro no Nether. Nunca para."); }
-            case "solar" -> { mat = Material.DAYLIGHT_DETECTOR; name = "Painel Solar"; lore = List.of("1.5 energia/s de dia com ceu aberto.", "Nao gera a noite."); }
-            case "bateria" -> { mat = Material.LODESTONE; name = "Bateria"; lore = List.of("Guarda ate 5000 de energia.", "Geradores a ate " + (int) LINK_RANGE + " blocos carregam ela."); }
+            case "solar" -> { mat = Material.DAYLIGHT_DETECTOR; name = "Painel Solar"; lore = List.of("1.5 energia/s de dia com ceu aberto.", "Gera corrente continua (CC): precisa", "de um Inversor na rede para abastecer."); }
+            case "bateria" -> { mat = Material.LODESTONE; name = "Bateria"; lore = List.of("Guarda ate 5000 de energia.", "Geradores na mesma rede carregam ela."); }
+            case "inversor" -> { mat = Material.WAXED_COPPER_BULB; name = "Inversor CC/CA"; lore = List.of("Converte a energia dos paineis solares", "da rede (CC) para as maquinas (CA).", "Ate " + (int) INVERTER_RATE + " energia/s, 90% de eficiencia."); }
+            case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor."); }
             default -> { return null; }
         }
         ItemStack it = new ItemStack(mat);
@@ -160,7 +171,8 @@ final class Engineer implements Listener {
     static String label(String type) {
         return switch (type) {
             case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
-            case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria"; default -> type;
+            case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
+            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; default -> type;
         };
     }
 
@@ -189,6 +201,12 @@ final class Engineer implements Listener {
         String type = typeOf(e.getItemInHand());
         if (type == null) return;
         Player p = e.getPlayer();
+        if (type.equals("cabo")) { // qualquer um da party pode puxar fio
+            Block cb = e.getBlockPlaced();
+            cables.add(key(cb.getWorld().getName(), cb.getX(), cb.getY(), cb.getZ()));
+            invalidate();
+            return;
+        }
         if (!plugin.is(p, PClass.ENGENHEIRO)) {
             e.setCancelled(true);
             p.sendMessage(Component.text("So engenheiros sabem montar isso.", NamedTextColor.RED));
@@ -208,13 +226,16 @@ final class Engineer implements Listener {
             return;
         }
         devices.put(d.key(), d);
+        invalidate();
         p.sendMessage(Component.text("⚙ " + label(type) + " instalado.", NamedTextColor.GOLD));
-        if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e um gerador ou bateria a ate " + (int) LINK_RANGE + " blocos.", NamedTextColor.GRAY));
+        if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e ligue com cabo num gerador ou bateria.", NamedTextColor.GRAY));
+        if (type.equals("solar")) p.sendMessage(Component.text("Painel solar gera CC: ligue um Inversor na mesma rede.", NamedTextColor.GRAY));
     }
 
     /** Remove o dispositivo: derruba o conteudo, o item customizado e vira ar. */
     private void breakDevice(Block b, Device d, boolean dropItem) {
         devices.remove(d.key());
+        invalidate();
         removeTag(d);
         BlockState st = b.getState();
         if (st instanceof Container c) {
@@ -228,6 +249,11 @@ final class Engineer implements Listener {
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
     public void onBreak(BlockBreakEvent e) {
+        if (isCable(e.getBlock())) {
+            e.setCancelled(true);
+            breakCable(e.getBlock(), e.getPlayer().getGameMode() != GameMode.CREATIVE);
+            return;
+        }
         Device d = at(e.getBlock());
         if (d == null) return;
         e.setCancelled(true);
@@ -237,6 +263,7 @@ final class Engineer implements Listener {
     private void explode(List<Block> blocks) {
         for (Iterator<Block> it = blocks.iterator(); it.hasNext(); ) {
             Block b = it.next();
+            if (isCable(b)) { it.remove(); breakCable(b, true); continue; }
             Device d = at(b);
             if (d != null) { it.remove(); breakDevice(b, d, true); }
         }
@@ -246,9 +273,9 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true) public void onBlockExplode(BlockExplodeEvent e) { explode(e.blockList()); }
 
     @EventHandler(ignoreCancelled = true)
-    public void onPistonOut(BlockPistonExtendEvent e) { for (Block b : e.getBlocks()) if (at(b) != null) { e.setCancelled(true); return; } }
+    public void onPistonOut(BlockPistonExtendEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b)) { e.setCancelled(true); return; } }
     @EventHandler(ignoreCancelled = true)
-    public void onPistonIn(BlockPistonRetractEvent e) { for (Block b : e.getBlocks()) if (at(b) != null) { e.setCancelled(true); return; } }
+    public void onPistonIn(BlockPistonRetractEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b)) { e.setCancelled(true); return; } }
     @EventHandler(ignoreCancelled = true)
     public void onBurn(BlockBurnEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
 
@@ -262,6 +289,25 @@ final class Engineer implements Listener {
 
     // ---------- interacao ----------
 
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onLever(PlayerInteractEvent e) {
+        Block b = e.getClickedBlock();
+        if (b == null || b.getType() != Material.LEVER || e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
+        boolean touches = false;
+        for (int[] d : DIRS6) {
+            String k = key(b.getWorld().getName(), b.getX() + d[0], b.getY() + d[1], b.getZ() + d[2]);
+            if (cables.contains(k) || devices.containsKey(k)) { touches = true; break; }
+        }
+        if (!touches) return;
+        Player p = e.getPlayer();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            invalidate();
+            boolean on = b.getBlockData() instanceof org.bukkit.block.data.Powerable pw && pw.isPowered();
+            p.sendActionBar(Component.text("Disjuntor " + (on ? "ligado" : "desligado"), on ? NamedTextColor.GREEN : NamedTextColor.RED));
+            p.playSound(b.getLocation(), on ? Sound.BLOCK_COPPER_BULB_TURN_ON : Sound.BLOCK_COPPER_BULB_TURN_OFF, 0.8f, 1f);
+        });
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent e) {
         if (e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || e.getHand() != EquipmentSlot.HAND || e.getClickedBlock() == null) return;
@@ -274,14 +320,11 @@ final class Engineer implements Listener {
                 if (!plugin.is(p, PClass.ENGENHEIRO)) { p.sendMessage(Component.text("So engenheiros entendem essa bancada.", NamedTextColor.RED)); return; }
                 openBench(p);
             }
-            case "bateria", "geotermico", "solar" -> {
+            case "bateria", "geotermico", "solar", "carvao", "inversor" -> {
+                ItemStack hand = p.getInventory().getItemInMainHand();
+                if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return;
                 e.setCancelled(true);
-                p.sendActionBar(Component.text(label(d.type) + ": " + (int) d.energy + "/" + (int) d.cap() + " energia" + rateText(d, e.getClickedBlock()), NamedTextColor.GOLD));
-                showRange(p, d, LINK_RANGE, Color.fromRGB(255, 200, 40));
-            }
-            case "carvao" -> {
-                p.sendActionBar(Component.text("Gerador: " + (int) d.energy + "/" + (int) d.cap() + " energia, queimando " + d.burn + "s", NamedTextColor.GOLD));
-                showRange(p, d, LINK_RANGE, Color.fromRGB(255, 200, 40));
+                openMachine(p, d);
             }
             case "torre" -> {
                 ItemStack hand = p.getInventory().getItemInMainHand();
@@ -292,10 +335,6 @@ final class Engineer implements Listener {
         }
     }
 
-    private String rateText(Device d, Block b) {
-        double r = rate(d, b);
-        return r > 0 ? String.format(Locale.ROOT, " (+%.1f/s)", r) : " (parado)";
-    }
 
     // ---------- bancada (menu) ----------
 
@@ -367,7 +406,7 @@ final class Engineer implements Listener {
         inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
                 "Receita na mesa de trabalho:", "  _ R _", "  I M I", "  I I I",
                 "R = redstone, I = ferro, M = mesa de trabalho", "", "Clique para ver o craft."));
-        int slot = 12;
+        int slot = 11;
         for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Clique para ver o craft"));
 
         Material[] mats = {Material.COPPER_INGOT, Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.NETHERITE_INGOT};
@@ -393,9 +432,9 @@ final class Engineer implements Listener {
                 "Geradores e baterias: " + count(id, w, false) + "/" + MAX_POWER_DEVICES,
                 "Energia guardada: " + (int) storedEnergy(id, w)));
         inv.setItem(48, icon(Material.LIGHTNING_ROD, "Como funciona a energia", NamedTextColor.YELLOW,
-                "Sem fios: geradores e baterias a ate " + (int) LINK_RANGE,
-                "blocos alimentam a torre.", "Cada tiro gasta " + (int) SHOT_COST + " de energia.",
-                "Geradores enchem as baterias proximas.", "",
+                "Ligue as maquinas com Cabos de Energia.", "Tudo encostado no mesmo cabo e uma rede.",
+                "Alavanca no meio do cabo = disjuntor.", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
+                "Geradores enchem as baterias da rede.", "Solar e CC: precisa de Inversor na rede.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
                 "Flechas ou bolas de fogo dentro da torre,", "ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
@@ -424,7 +463,7 @@ final class Engineer implements Listener {
         if (raw == 52) plugin.openMenu(p);
         else if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
         else if (raw == 10) openRecipe(p, "bancada");
-        else if (raw >= 12 && raw < 12 + recipes.size()) openRecipe(p, recipes.get(raw - 12).type());
+        else if (raw >= 11 && raw < 11 + recipes.size()) openRecipe(p, recipes.get(raw - 11).type());
     }
 
     // ---------- tela de craft de um item ----------
@@ -488,7 +527,8 @@ final class Engineer implements Listener {
             inv.setItem(23, icon(lvlOk && near ? Material.LIME_CONCRETE : Material.RED_CONCRETE,
                     "Montar", lvlOk && near ? NamedTextColor.GREEN : NamedTextColor.RED, lore.toArray(new String[0])));
         }
-        inv.setItem(25, item(type));
+        ItemStack res = item(type); Recipe rr = recipe(type); if (rr != null) res.setAmount(rr.amount());
+        inv.setItem(25, res);
         inv.setItem(36, icon(Material.ARROW, "Voltar", NamedTextColor.WHITE, "Volta para o painel da classe."));
         p.openInventory(inv);
     }
@@ -554,7 +594,8 @@ final class Engineer implements Listener {
                 return false;
             }
         for (Map.Entry<Material, Integer> c : r.cost().entrySet()) takeMat(p, c.getKey(), c.getValue());
-        for (ItemStack left : p.getInventory().addItem(item(r.type())).values()) p.getWorld().dropItemNaturally(p.getLocation(), left);
+        ItemStack out = item(r.type()); out.setAmount(r.amount());
+        for (ItemStack left : p.getInventory().addItem(out).values()) p.getWorld().dropItemNaturally(p.getLocation(), left);
         p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1f);
         plugin.addXp(p.getUniqueId(), 3);
         return true;
@@ -601,25 +642,149 @@ final class Engineer implements Listener {
     private boolean valid(Device d, Block b) {
         Material want = switch (d.type) {
             case "bancada" -> Material.SMITHING_TABLE; case "torre" -> Material.DISPENSER; case "carvao" -> Material.FURNACE;
-            case "geotermico" -> Material.MAGMA_BLOCK; case "solar" -> Material.DAYLIGHT_DETECTOR; default -> Material.LODESTONE;
+            case "geotermico" -> Material.MAGMA_BLOCK; case "solar" -> Material.DAYLIGHT_DETECTOR; case "inversor" -> Material.WAXED_COPPER_BULB;
+            default -> Material.LODESTONE;
         };
         return b.getType() == want;
     }
 
+    // ---------- redes ----------
+
+    static final int[][] DIRS6 = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+
+    static final class Net {
+        final List<Device> devs = new ArrayList<>();
+        final List<int[]> nodes = new ArrayList<>();
+        int count(String type) { int n = 0; for (Device d : devs) if (d.type.equals(type)) n++; return n; }
+    }
+
+    private final Set<String> cables = new HashSet<>();
+    private final Map<String, Net> netCache = new HashMap<>();
+    private final Map<String, List<int[]>> pathCache = new HashMap<>();
+    private long lastInvalidate;
+
+    static String key(String w, int x, int y, int z) { return w + ":" + x + ":" + y + ":" + z; }
+
+    private boolean isCable(Block b) { return cables.contains(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ())); }
+
+    private static boolean cableBlock(Material m) { return m.name().endsWith("COPPER_CHAIN"); }
+
+    private void breakCable(Block b, boolean drop) {
+        cables.remove(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()));
+        b.setType(Material.AIR);
+        if (drop) b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), item("cabo"));
+        invalidate();
+    }
+
+    void invalidate() { netCache.clear(); pathCache.clear(); lastInvalidate = System.currentTimeMillis(); }
+
+    /** O bloco conduz energia? cabo, maquina ou alavanca ligada encostada na rede. */
+    private boolean conducts(World w, int x, int y, int z) {
+        String k = key(w.getName(), x, y, z);
+        if (devices.containsKey(k)) return true;
+        if (cables.contains(k)) {
+            if (w.isChunkLoaded(x >> 4, z >> 4) && !cableBlock(w.getBlockAt(x, y, z).getType())) { cables.remove(k); return false; }
+            return true;
+        }
+        if (!w.isChunkLoaded(x >> 4, z >> 4)) return false;
+        Block b = w.getBlockAt(x, y, z);
+        return b.getType() == Material.LEVER && b.getBlockData() instanceof org.bukkit.block.data.Powerable pw && pw.isPowered();
+    }
+
+    Net net(Device d) {
+        Net cached = netCache.get(d.key());
+        if (cached != null) return cached;
+        Net n = new Net();
+        World w = Bukkit.getWorld(d.world);
+        if (w == null) { n.devs.add(d); return n; }
+        ArrayDeque<int[]> q = new ArrayDeque<>();
+        Set<String> seen = new HashSet<>();
+        q.add(new int[]{d.x, d.y, d.z});
+        seen.add(d.key());
+        while (!q.isEmpty() && seen.size() < MAX_NET_NODES) {
+            int[] c = q.poll();
+            n.nodes.add(c);
+            Device dev = devices.get(key(d.world, c[0], c[1], c[2]));
+            if (dev != null) n.devs.add(dev);
+            for (int[] o : DIRS6) {
+                int x = c[0] + o[0], y = c[1] + o[1], z = c[2] + o[2];
+                String k = key(d.world, x, y, z);
+                if (seen.contains(k) || !conducts(w, x, y, z)) continue;
+                seen.add(k);
+                q.add(new int[]{x, y, z});
+            }
+        }
+        for (Device m : n.devs) netCache.put(m.key(), n);
+        return n;
+    }
+
+    /** Caminho pelos cabos entre duas maquinas da mesma rede (BFS), para o pulso de particulas. */
+    private List<int[]> cablePath(Device a, Device b) {
+        String pk = a.key() + ">" + b.key();
+        List<int[]> cached = pathCache.get(pk);
+        if (cached != null) return cached;
+        World w = Bukkit.getWorld(a.world);
+        if (w == null) return null;
+        Map<String, String> parent = new HashMap<>();
+        ArrayDeque<int[]> q = new ArrayDeque<>();
+        q.add(new int[]{a.x, a.y, a.z});
+        parent.put(a.key(), "");
+        String goal = b.key();
+        while (!q.isEmpty() && parent.size() < MAX_NET_NODES) {
+            int[] c = q.poll();
+            String ck = key(a.world, c[0], c[1], c[2]);
+            if (ck.equals(goal)) break;
+            for (int[] o : DIRS6) {
+                int x = c[0] + o[0], y = c[1] + o[1], z = c[2] + o[2];
+                String k = key(a.world, x, y, z);
+                if (parent.containsKey(k)) continue;
+                // maquinas no meio do caminho nao sao atravessadas pelo pulso, so cabos e alavancas
+                if (!k.equals(goal) && devices.containsKey(k)) continue;
+                if (!conducts(w, x, y, z)) continue;
+                parent.put(k, ck);
+                q.add(new int[]{x, y, z});
+            }
+        }
+        if (!parent.containsKey(goal)) { pathCache.put(pk, null); return null; }
+        LinkedList<int[]> out = new LinkedList<>();
+        for (String k = goal; !k.isEmpty(); k = parent.get(k)) {
+            String[] sp = k.split(":");
+            int n = sp.length;
+            out.addFirst(new int[]{Integer.parseInt(sp[n - 3]), Integer.parseInt(sp[n - 2]), Integer.parseInt(sp[n - 1])});
+        }
+        List<int[]> path = new ArrayList<>(out);
+        pathCache.put(pk, path);
+        return path;
+    }
+
+    private void pulse(Device from, Device to, Color c) {
+        World w = Bukkit.getWorld(from.world);
+        if (w != null) fx.pulse(w, cablePath(from, to), c);
+    }
+
+    static final Color AC = Color.fromRGB(255, 150, 30), DC = Color.fromRGB(80, 200, 255), CHARGE = Color.fromRGB(255, 220, 50);
+
+    /** Fonte de CA para torres e baterias. Painel solar nao entra: e CC. */
+    private static boolean acGenerator(Device d) {
+        return d.enabled && (d.type.equals("carvao") || d.type.equals("geotermico") || d.type.equals("inversor"));
+    }
+
     private void tickPower() {
         if (lastPos.size() > 2000) lastPos.clear();
-        List<Device> gens = new ArrayList<>(), batts = new ArrayList<>();
+        if (System.currentTimeMillis() - lastInvalidate > 30_000) invalidate(); // pega mudancas feitas por fora
+        List<Device> gens = new ArrayList<>(), inverters = new ArrayList<>();
         for (Iterator<Device> it = devices.values().iterator(); it.hasNext(); ) {
             Device d = it.next();
             if (!d.isSource()) continue;
             World w = Bukkit.getWorld(d.world);
             if (!loaded(d, w)) continue;
             Block b = w.getBlockAt(d.x, d.y, d.z);
-            if (!valid(d, b)) { it.remove(); removeTag(d); continue; }
-            if (d.type.equals("bateria")) { batts.add(d); continue; }
+            if (!valid(d, b)) { it.remove(); removeTag(d); invalidate(); continue; }
+            if (d.type.equals("bateria")) continue;
+            if (d.type.equals("inversor")) { inverters.add(d); continue; }
             if (d.type.equals("carvao")) {
-                if (d.burn > 0) d.burn--;
-                if (d.burn <= 0 && d.energy < d.cap() && b.getState() instanceof org.bukkit.block.Furnace f) {
+                if (d.burn > 0 && d.enabled) d.burn--;
+                if (d.enabled && d.burn <= 0 && d.energy < d.cap() && b.getState() instanceof org.bukkit.block.Furnace f) {
                     ItemStack fuel = f.getInventory().getFuel();
                     int secs = fuel == null ? 0 : fuelSeconds(fuel.getType());
                     if (secs > 0) {
@@ -628,42 +793,73 @@ final class Engineer implements Listener {
                         d.burn = secs;
                     }
                 }
-                if (d.burn > 0 && b.getState() instanceof org.bukkit.block.Furnace fresh && fresh.getBurnTime() < 30) {
+                if (d.enabled && d.burn > 0 && b.getState() instanceof org.bukkit.block.Furnace fresh && fresh.getBurnTime() < 30) {
                     // mantem a fornalha acesa (chama e luz vanilla) enquanto o gerador queima
                     fresh.setBurnTime((short) 40);
                     fresh.update(true, false);
                 }
             }
-            d.lastRate = rate(d, b);
+            d.lastRate = d.enabled ? rate(d, b) : 0;
             d.energy = Math.min(d.cap(), d.energy + d.lastRate);
-            gens.add(d);
+            if (!d.type.equals("solar")) gens.add(d);
         }
-        // geradores despejam o excedente nas baterias proximas
+        // inversores puxam CC dos paineis solares da rede e entregam CA
+        for (Device inv : inverters) {
+            inv.lastRate = 0;
+            World w = Bukkit.getWorld(inv.world);
+            if (inv.enabled) {
+                double want = Math.min(INVERTER_RATE, (inv.cap() - inv.energy) / INVERTER_EFF);
+                Device firstPanel = null;
+                for (Device sp : net(inv).devs) {
+                    if (want <= 0) break;
+                    if (!sp.type.equals("solar") || !sp.enabled || sp.energy <= 0) continue;
+                    double take = Math.min(sp.energy, want);
+                    sp.energy -= take; want -= take;
+                    inv.energy += take * INVERTER_EFF; inv.lastRate += take * INVERTER_EFF;
+                    if (firstPanel == null) firstPanel = sp;
+                }
+                if (firstPanel != null) pulse(firstPanel, inv, DC);
+            }
+            if (w != null && loaded(inv, w)) {
+                Block b = w.getBlockAt(inv.x, inv.y, inv.z);
+                if (b.getBlockData() instanceof org.bukkit.block.data.Lightable l && l.isLit() != (inv.lastRate > 0)) {
+                    l.setLit(inv.lastRate > 0);
+                    b.setBlockData(l, false);
+                }
+            }
+            gens.add(inv);
+        }
+        // torres ligadas pagam manutencao todo segundo; sem pagar, ficam desligadas
+        powerTicks++;
+        for (Device t : devices.values()) {
+            if (!t.type.equals("torre")) continue;
+            World w = Bukkit.getWorld(t.world);
+            if (!t.enabled || !loaded(t, w)) { t.powered = false; continue; }
+            t.powered = drain(t, upkeep(plugin.level(t.owner)), powerTicks % 3 == 0);
+        }
+        // geradores despejam o excedente nas baterias da mesma rede
         for (Device g : gens) {
-            if (g.energy <= 0) continue;
-            for (Device bt : batts) {
-                if (!bt.world.equals(g.world) || dist2(g, bt) > LINK_RANGE * LINK_RANGE) continue;
+            if (g.energy <= 0 || !acGenerator(g)) continue;
+            for (Device bt : net(g).devs) {
+                if (!bt.type.equals("bateria") || !bt.enabled || bt.mode == 2) continue;
                 double move = Math.min(g.energy, bt.cap() - bt.energy);
                 if (move <= 0) continue;
                 g.energy -= move; bt.energy += move;
-                World gw = Bukkit.getWorld(g.world);
-                if (gw != null) fx.pulse(gw, g.x, g.y, g.z, bt.x, bt.y, bt.z, Color.fromRGB(255, 210, 40));
+                pulse(g, bt, CHARGE);
                 if (g.energy <= 0) break;
             }
         }
         updateTags();
     }
 
-    private static double dist2(Device a, Device b) {
-        double dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
-        return dx * dx + dy * dy + dz * dz;
-    }
-
+    /** Fontes que podem pagar um tiro: geradores CA primeiro, depois baterias que fornecem. */
     private List<Device> sourcesFor(Device t) {
         List<Device> out = new ArrayList<>();
-        for (Device d : devices.values())
-            if (d.isSource() && d.world.equals(t.world) && dist2(d, t) <= LINK_RANGE * LINK_RANGE) out.add(d);
-        out.sort(Comparator.comparingInt(d -> d.type.equals("bateria") ? 1 : 0)); // geradores primeiro
+        for (Device d : net(t).devs) {
+            if (acGenerator(d)) out.add(d);
+            else if (d.type.equals("bateria") && d.enabled && d.mode != 1) out.add(d);
+        }
+        out.sort(Comparator.comparingInt(d -> d.type.equals("bateria") ? 1 : 0));
         return out;
     }
 
@@ -673,21 +869,103 @@ final class Engineer implements Listener {
         return s;
     }
 
-    private boolean drain(Device t, double amount) {
+    private boolean drain(Device t, double amount) { return drain(t, amount, true); }
+
+    private boolean drain(Device t, double amount, boolean show) {
         List<Device> src = sourcesFor(t);
         double total = 0;
         for (Device d : src) total += d.energy;
         if (total < amount) return false;
-        World w = Bukkit.getWorld(t.world);
         for (Device d : src) {
             double take = Math.min(d.energy, amount);
             if (take <= 0) continue;
             d.energy -= take; amount -= take;
-            if (w != null) fx.pulse(w, d.x, d.y, d.z, t.x, t.y, t.z, Color.fromRGB(255, 120, 30));
+            if (show) pulse(d, t, AC);
             if (amount <= 0) break;
         }
         return true;
     }
+
+    private String netSummary(Net n) {
+        int gen = n.count("carvao") + n.count("geotermico");
+        return gen + " geradores, " + n.count("solar") + " paineis, " + n.count("inversor") + " inversores, "
+                + n.count("bateria") + " baterias, " + n.count("torre") + " torres";
+    }
+
+    // ---------- menu das maquinas ----------
+
+    static final class MachineMenu implements InventoryHolder {
+        Inventory inv; String key;
+        @Override public Inventory getInventory() { return inv; }
+    }
+
+    static final String[] BAT_MODES = {"Carrega e fornece", "So carrega", "So fornece"};
+
+    void openMachine(Player p, Device d) {
+        World w = Bukkit.getWorld(d.world);
+        if (w == null) return;
+        MachineMenu h = new MachineMenu();
+        h.key = d.key();
+        Inventory inv = Bukkit.createInventory(h, 27, Component.text(label(d.type)));
+        h.inv = inv;
+        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
+        for (int i = 0; i < 27; i++) inv.setItem(i, filler);
+        Net n = net(d);
+        List<String> info = new ArrayList<>();
+        info.add("Energia: " + (int) d.energy + "/" + (int) d.cap());
+        if (!d.type.equals("bateria")) info.add(String.format(Locale.ROOT, "Gerando: %.1f/s", d.lastRate));
+        if (d.type.equals("carvao")) info.add("Queimando: " + d.burn + "s");
+        if (d.type.equals("solar") && n.count("inversor") == 0) info.add("SEM INVERSOR: energia parada");
+        if (d.type.equals("inversor")) info.add("Paineis na rede: " + n.count("solar"));
+        OfflinePlayer owner = Bukkit.getOfflinePlayer(d.owner);
+        info.add("Dono: " + (owner.getName() == null ? "?" : owner.getName()));
+        inv.setItem(4, icon(item(d.type).getType(), label(d.type), NamedTextColor.GOLD, info.toArray(new String[0])));
+
+        inv.setItem(10, icon(d.enabled ? Material.LIME_DYE : Material.GRAY_DYE, d.enabled ? "Ligado" : "Desligado",
+                d.enabled ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (d.enabled ? "desligar" : "ligar") + "."));
+        if (d.type.equals("carvao"))
+            inv.setItem(12, icon(Material.COAL, "Combustivel", NamedTextColor.WHITE, "Abre a fornalha para colocar", "carvao, bloco de carvao, vara", "de blaze ou bloco de alga seca."));
+        if (d.type.equals("bateria"))
+            inv.setItem(12, icon(Material.COMPARATOR, "Modo: " + BAT_MODES[d.mode], NamedTextColor.YELLOW,
+                    "Carrega e fornece: normal.", "So carrega: guarda para depois.", "So fornece: nao aceita carga.", "", "Clique para trocar."));
+        inv.setItem(14, icon(d.tagOn ? Material.NAME_TAG : Material.PAPER, "Etiqueta: " + (d.tagOn ? "ligada" : "desligada"),
+                d.tagOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Clique para " + (d.tagOn ? "desligar" : "ligar") + "."));
+        inv.setItem(16, icon(Material.WAXED_COPPER_CHAIN, "Mostrar rede", NamedTextColor.AQUA,
+                netSummary(n), "", "Acende os cabos da rede", "por alguns segundos."));
+        p.openInventory(inv);
+    }
+
+    private void showNet(Player p, Device d) {
+        List<int[]> nodes = net(d).nodes;
+        for (int k = 0; k < 4; k++)
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) fx.flash(p, nodes, Color.fromRGB(80, 230, 255)); }, k * 15L);
+    }
+
+    @EventHandler
+    public void onMachineClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof MachineMenu h)) return;
+        e.setCancelled(true);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        Device d = devices.get(h.key);
+        if (d == null) { p.closeInventory(); return; }
+        World w = Bukkit.getWorld(d.world);
+        switch (e.getRawSlot()) {
+            case 10 -> d.enabled = !d.enabled;
+            case 12 -> {
+                if (d.type.equals("bateria")) d.mode = (d.mode + 1) % BAT_MODES.length;
+                else if (d.type.equals("carvao") && w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) { p.openInventory(c.getInventory()); return; }
+                else return;
+            }
+            case 14 -> d.tagOn = !d.tagOn;
+            case 16 -> { p.closeInventory(); showNet(p, d); return; }
+            default -> { return; }
+        }
+        p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);
+        openMachine(p, d);
+    }
+
+    @EventHandler
+    public void onMachineDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof MachineMenu) e.setCancelled(true); }
 
     // ---------- torres ----------
 
@@ -720,11 +998,11 @@ final class Engineer implements Listener {
         tick += 5;
         for (Iterator<Device> it = devices.values().iterator(); it.hasNext(); ) {
             Device t = it.next();
-            if (!t.type.equals("torre") || t.nextShot > tick) continue;
+            if (!t.type.equals("torre") || !t.enabled || !t.powered || t.nextShot > tick) continue;
             World w = Bukkit.getWorld(t.world);
             if (!loaded(t, w)) continue;
             Block b = w.getBlockAt(t.x, t.y, t.z);
-            if (!valid(t, b)) { it.remove(); removeTag(t); continue; }
+            if (!valid(t, b)) { it.remove(); removeTag(t); invalidate(); continue; }
             int lvl = plugin.level(t.owner);
             int range = RANGE[lvl - 1];
             Location c = t.center(w);
@@ -882,9 +1160,12 @@ final class Engineer implements Listener {
                 int[] am = ammo(b);
                 double net = networkEnergy(d, w);
                 Component state;
-                if (am[0] + am[1] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
-                else if (net < SHOT_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
-                else state = Component.text("⚡ " + (int) net + " na rede", NamedTextColor.YELLOW);
+                if (!d.enabled) state = Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD);
+                else if (sourcesFor(d).isEmpty()) state = Component.text("SEM REDE", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (am[0] + am[1] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (!d.powered || net < SHOT_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
+                else state = Component.text("⚡ " + (int) net + " na rede  ", NamedTextColor.YELLOW)
+                        .append(Component.text(String.format(Locale.ROOT, "-%.2f/s", upkeep(lvl)), NamedTextColor.RED));
                 return name.append(nl).append(Component.text("Nivel " + lvl + "  •  alcance " + RANGE[lvl - 1], g))
                         .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo", NamedTextColor.WHITE))
                         .append(nl).append(state);
@@ -893,13 +1174,19 @@ final class Engineer implements Listener {
                 Component line = Component.text("⚡ " + (int) d.energy + "/" + (int) d.cap() + "  ", NamedTextColor.YELLOW)
                         .append(Component.text(bar(d.energy, d.cap()), d.energy > 0 ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY));
                 Component out = name.append(nl).append(line);
+                if (!d.enabled) return out.append(nl).append(Component.text("DESLIGADO", NamedTextColor.GRAY, TextDecoration.BOLD));
                 if (!d.type.equals("bateria")) {
+                    String idle = switch (d.type) { case "carvao" -> "sem combustivel"; case "inversor" -> "sem energia solar"; default -> "parado"; };
                     out = out.append(nl).append(d.lastRate > 0
                             ? Component.text(String.format(Locale.ROOT, "+%.1f/s", d.lastRate), NamedTextColor.GREEN)
-                            : Component.text(d.type.equals("carvao") ? "sem combustivel" : "parado", NamedTextColor.RED));
+                            : Component.text(idle, NamedTextColor.RED));
                     if (d.type.equals("carvao") && d.burn > 0) out = out.append(Component.text("  (" + d.burn + "s)", g));
-                }
-                return out.append(nl).append(Component.text("alcance " + (int) LINK_RANGE + " blocos", g));
+                } else if (d.mode != 0) out = out.append(nl).append(Component.text(BAT_MODES[d.mode], g));
+                Net n = net(d);
+                int users = n.count("torre") + n.count("bateria") - (d.type.equals("bateria") ? 1 : 0);
+                return out.append(nl).append(n.devs.size() <= 1
+                        ? Component.text("sem cabo", NamedTextColor.RED)
+                        : Component.text("rede: " + (n.devs.size() - 1) + " maquinas", g));
             }
         }
     }
@@ -938,7 +1225,9 @@ final class Engineer implements Listener {
                         .append(Component.text(bar(e, cap), e > 0 ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY)))
                 .append(nl).append(rate > 0 ? Component.text(String.format(Locale.ROOT, "+%.1f/s", rate), NamedTextColor.GREEN)
                         : Component.text("parado (noite ou sombra)", NamedTextColor.RED))
-                .append(nl).append(Component.text("alcance " + (int) LINK_RANGE + " blocos", NamedTextColor.GRAY));
+                .append(nl).append(net(g.get(0)).count("inversor") == 0
+                        ? Component.text("SEM INVERSOR (CC)", NamedTextColor.RED, TextDecoration.BOLD)
+                        : Component.text("ligado ao inversor", NamedTextColor.AQUA));
     }
 
     private void updateTags() {
@@ -947,7 +1236,7 @@ final class Engineer implements Listener {
         for (Device d : devices.values()) {
             World w = Bukkit.getWorld(d.world);
             if (!loaded(d, w)) { d.tag = null; continue; }
-            if (followers.contains(d) || (d.type.equals("torre") && !d.tagOn)) { removeTag(d); continue; }
+            if (followers.contains(d) || !d.tagOn) { removeTag(d); continue; }
             Block b = w.getBlockAt(d.x, d.y, d.z);
             Location at = new Location(w, d.x + 0.5, d.y + 1.55, d.z + 0.5);
             Component text;
@@ -1017,7 +1306,9 @@ final class Engineer implements Listener {
         inv.setItem(4, icon(Material.DISPENSER, "Torre Sentinela", NamedTextColor.GOLD,
                 "Dono: " + (owner.getName() == null ? "?" : owner.getName()) + " (Engenheiro nivel " + lvl + ")",
                 "Alcance " + RANGE[lvl - 1] + " blocos, " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[lvl - 1]) + " tiros/s",
-                "Energia na rede: " + (int) net));
+                "Energia na rede: " + (int) net,
+                String.format(Locale.ROOT, "Consumo ligada: %.2f/s + %d por tiro", upkeep(lvl), (int) SHOT_COST),
+                d.enabled && !d.powered ? "SEM ENERGIA: nao esta atirando" : ""));
         inv.setItem(10, icon(Material.CHEST, "Municao", NamedTextColor.WHITE,
                 am[0] + " flechas, " + am[1] + " bolas de fogo", "", "Clique para abrir e colocar", "flechas ou bolas de fogo."));
         Material am2 = d.ammoPref == 2 ? Material.FIRE_CHARGE : d.ammoPref == 1 ? Material.ARROW : Material.BOW;
@@ -1033,7 +1324,10 @@ final class Engineer implements Listener {
                     on ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (on ? "ignorar" : "atirar") + "."));
         }
         inv.setItem(22, icon(Material.OAK_SIGN, "Filtro de mobs", NamedTextColor.WHITE, "Escolha abaixo em quem", "a torre atira."));
+        inv.setItem(38, icon(d.enabled ? Material.LIME_DYE : Material.GRAY_DYE, d.enabled ? "Ligada" : "Desligada",
+                d.enabled ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (d.enabled ? "desligar" : "ligar") + "."));
         inv.setItem(40, icon(Material.ENDER_EYE, "Mostrar alcance", NamedTextColor.LIGHT_PURPLE, "Desenha o alcance no chao", "por 3 segundos."));
+        inv.setItem(42, icon(Material.WAXED_COPPER_CHAIN, "Mostrar rede", NamedTextColor.AQUA, netSummary(net(d)), "", "Acende os cabos da rede."));
         p.openInventory(inv);
     }
 
@@ -1055,6 +1349,8 @@ final class Engineer implements Listener {
             case 14 -> d.prio = (d.prio + 1) % PRIOS.length;
             case 16 -> d.tagOn = !d.tagOn;
             case 40 -> { p.closeInventory(); showRange(p, d, RANGE[plugin.level(d.owner) - 1], Color.fromRGB(230, 60, 40)); return; }
+            case 38 -> d.enabled = !d.enabled;
+            case 42 -> { p.closeInventory(); showNet(p, d); return; }
             default -> {
                 int i = raw - 28;
                 if (i >= 4) i--; // slot 31 e o espaco do meio
@@ -1105,6 +1401,7 @@ final class Engineer implements Listener {
 
     private void load() {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(file);
+        cables.addAll(y.getStringList("cables"));
         ConfigurationSection s = y.getConfigurationSection("devices");
         if (s == null) return;
         for (String k : s.getKeys(false)) {
@@ -1115,6 +1412,8 @@ final class Engineer implements Listener {
                 d.energy = c.getDouble("energy");
                 d.burn = c.getInt("burn");
                 d.tagOn = c.getBoolean("tag", true);
+                d.enabled = c.getBoolean("on", true);
+                d.mode = c.getInt("mode");
                 d.filter = c.getInt("filter", 0b111111);
                 d.prio = c.getInt("prio");
                 d.ammoPref = c.getInt("ammo");
@@ -1133,11 +1432,13 @@ final class Engineer implements Listener {
             y.set(k + ".owner", d.owner.toString());
             y.set(k + ".energy", Math.round(d.energy * 10) / 10.0);
             y.set(k + ".burn", d.burn);
+            y.set(k + ".tag", d.tagOn); y.set(k + ".on", d.enabled); y.set(k + ".mode", d.mode);
             if (d.type.equals("torre")) {
-                y.set(k + ".tag", d.tagOn); y.set(k + ".filter", d.filter);
+                y.set(k + ".filter", d.filter);
                 y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);
             }
         }
+        y.set("cables", new ArrayList<>(cables));
         try { y.save(file); } catch (IOException ex) { plugin.getLogger().warning("devices.yml: " + ex.getMessage()); }
     }
 }
