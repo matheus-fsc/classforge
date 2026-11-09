@@ -468,6 +468,7 @@ final class Engineer implements Listener {
         boolean fxOn = plugin.fxEnabled(p);
         inv.setItem(8, icon(fxOn ? Material.GLOWSTONE_DUST : Material.GUNPOWDER, "Particulas de energia: " + (fxOn ? "ligadas" : "desligadas"),
                 fxOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Mostra a energia correndo pelos", "cabos ate as maquinas.", "", "Clique para " + (fxOn ? "desligar" : "ligar") + "."));
+        inv.setItem(45, icon(Material.ARROW, "Voltar", NamedTextColor.WHITE, "Volta para as habilidades."));
         p.openInventory(inv);
     }
 
@@ -484,7 +485,8 @@ final class Engineer implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int raw = e.getRawSlot();
-        if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
+        if (raw == 45) plugin.openHub(p);
+        else if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
         else if (raw == 10) openRecipe(p, "bancada");
         else if (raw >= 11 && raw < 11 + recipes.size()) openRecipe(p, recipes.get(raw - 11).type());
     }

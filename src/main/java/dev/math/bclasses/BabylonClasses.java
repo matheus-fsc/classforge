@@ -4,6 +4,13 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.command.Command;
@@ -177,9 +184,62 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             return true;
         }
         if (a.length >= 1 && a[0].equalsIgnoreCase("particulas")) { toggleFx(p); return true; }
-        engineer.openPanel(p);
+        openHub(p);
         return true;
     }
+
+    // ---------- menu de habilidades ----------
+
+    static final class SkillMenu implements InventoryHolder {
+        Inventory inv;
+        @Override public Inventory getInventory() { return inv; }
+    }
+
+    private static ItemStack skillIcon(Material mat, String name, NamedTextColor color, List<String> lore) {
+        ItemStack it = new ItemStack(mat);
+        ItemMeta m = it.getItemMeta();
+        m.displayName(Component.text(name, color, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+        List<Component> l = new ArrayList<>();
+        for (String s : lore) l.add(Component.text(s, s.startsWith("Em breve") ? NamedTextColor.RED : NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        m.lore(l);
+        m.addItemFlags(ItemFlag.values());
+        it.setItemMeta(m);
+        return it;
+    }
+
+    void openHub(Player p) {
+        SkillMenu h = new SkillMenu();
+        Inventory inv = Bukkit.createInventory(h, 27, Component.text("Habilidades"));
+        h.inv = inv;
+        ItemStack filler = skillIcon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY, List.of());
+        for (int i = 0; i < 27; i++) inv.setItem(i, filler);
+        int lvl = level(p.getUniqueId()), xp = data(p.getUniqueId()).xp;
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + LEVEL_XP[lvl];
+        inv.setItem(11, skillIcon(Material.COMPASS, "Exploracao", NamedTextColor.AQUA, List.of(
+                "Sobe andando pelo mundo.", "Bonus de comida e exploracao.", "", "Em breve")));
+        inv.setItem(13, skillIcon(Material.DISPENSER, "Engenharia - nivel " + lvl, NamedTextColor.GOLD, List.of(
+                next, "", "Torres, geradores, cabos e postes.", "Sobe montando, reparando e com", "abates das suas torres.", "", "Clique para abrir.")));
+        inv.setItem(15, skillIcon(Material.GOLDEN_HOE, "Coleta", NamedTextColor.GREEN, List.of(
+                "Farm e plantio automatizado.", "", "Em breve")));
+        inv.setItem(22, skillIcon(Material.BOOK, "Como funciona", NamedTextColor.WHITE, List.of(
+                "Ninguem escolhe classe: todo mundo", "pode fazer tudo. Cada habilidade", "tem nivel proprio e libera mais", "coisas conforme sobe.", "", "Os niveis zeram quando a vida acaba.")));
+        p.openInventory(inv);
+    }
+
+    @EventHandler
+    public void onHubClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof SkillMenu)) return;
+        e.setCancelled(true);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (e.getRawSlot() == 13) engineer.openPanel(p);
+        else if (e.getRawSlot() == 11 || e.getRawSlot() == 15) {
+            p.sendMessage(Component.text("Essa habilidade ainda esta em construcao.", NamedTextColor.GRAY));
+            p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
+        }
+    }
+
+    @EventHandler
+    public void onHubDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof SkillMenu) e.setCancelled(true); }
 
     @Override
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
