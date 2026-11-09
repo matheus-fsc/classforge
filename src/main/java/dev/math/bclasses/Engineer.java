@@ -732,7 +732,9 @@ final class Engineer implements Listener {
 
     static String key(String w, int x, int y, int z) { return w + ":" + x + ":" + y + ":" + z; }
 
-    private boolean isCable(Block b) { return cables.contains(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ())); }
+    private boolean isCable(Block b) {
+        return cables.contains(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ())) || b.getType().name().endsWith("COPPER_CHAIN");
+    }
 
     private static boolean cableBlock(Material m) {
         String n = m.name();
@@ -829,6 +831,11 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
     public void onPolePlace(BlockPlaceEvent e) {
         Block top = e.getBlockPlaced();
+        if (top.getType().name().endsWith("COPPER_CHAIN")) {
+            cables.add(key(top.getWorld().getName(), top.getX(), top.getY(), top.getZ()));
+            invalidate();
+            return;
+        }
         if (!isPoleTop(top.getType())) return;
         World w = top.getWorld();
         int y = top.getY() - 1, wood = 0;
@@ -859,6 +866,8 @@ final class Engineer implements Listener {
         }
         if (!w.isChunkLoaded(x >> 4, z >> 4)) return false;
         Block b = w.getBlockAt(x, y, z);
+        // qualquer corrente de cobre e cabo, mesmo sem o item da bancada (pick block, encerada na mao etc.)
+        if (b.getType().name().endsWith("COPPER_CHAIN")) { cables.add(k); return true; }
         return b.getType() == Material.LEVER && b.getBlockData() instanceof org.bukkit.block.data.Powerable pw && pw.isPowered();
     }
 
