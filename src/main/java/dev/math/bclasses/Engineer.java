@@ -53,6 +53,7 @@ final class Engineer implements Listener {
     static final double INVERTER_RATE = 8;     // energia/s que um inversor converte
     static final double INVERTER_EFF = 0.9;
     static final int MAX_NET_NODES = 4096;
+    static final double POLE_RANGE = 24;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
@@ -252,6 +253,13 @@ final class Engineer implements Listener {
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
     public void onBreak(BlockBreakEvent e) {
+        Block bb = e.getBlock();
+        String pk = poleBlocks.get(key(bb.getWorld().getName(), bb.getX(), bb.getY(), bb.getZ()));
+        if (pk != null && poles.containsKey(pk)) {
+            removePole(poles.get(pk));
+            e.getPlayer().sendActionBar(Component.text("Poste desmontado.", NamedTextColor.GRAY));
+            return;
+        }
         if (isCable(e.getBlock())) {
             e.setCancelled(true);
             breakCable(e.getBlock(), e.getPlayer().getGameMode() != GameMode.CREATIVE);
@@ -266,6 +274,8 @@ final class Engineer implements Listener {
     private void explode(List<Block> blocks) {
         for (Iterator<Block> it = blocks.iterator(); it.hasNext(); ) {
             Block b = it.next();
+            String pk = poleBlocks.get(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()));
+            if (pk != null && poles.containsKey(pk)) removePole(poles.get(pk));
             if (isCable(b)) { it.remove(); breakCable(b, true); continue; }
             Device d = at(b);
             if (d != null) { it.remove(); breakDevice(b, d, true); }
@@ -276,9 +286,9 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true) public void onBlockExplode(BlockExplodeEvent e) { explode(e.blockList()); }
 
     @EventHandler(ignoreCancelled = true)
-    public void onPistonOut(BlockPistonExtendEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b)) { e.setCancelled(true); return; } }
+    public void onPistonOut(BlockPistonExtendEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b) || poleBlocks.containsKey(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()))) { e.setCancelled(true); return; } }
     @EventHandler(ignoreCancelled = true)
-    public void onPistonIn(BlockPistonRetractEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b)) { e.setCancelled(true); return; } }
+    public void onPistonIn(BlockPistonRetractEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b) || poleBlocks.containsKey(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()))) { e.setCancelled(true); return; } }
     @EventHandler(ignoreCancelled = true)
     public void onBurn(BlockBurnEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
 
@@ -436,7 +446,8 @@ final class Engineer implements Listener {
                 "Energia guardada: " + (int) storedEnergy(id, w)));
         inv.setItem(48, icon(Material.LIGHTNING_ROD, "Como funciona a energia", NamedTextColor.YELLOW,
                 "Ligue as maquinas com Cabos de Energia.", "Tudo encostado no mesmo cabo e uma rede.",
-                "Alavanca no meio do cabo = disjuntor.", "Juncao (bloco de cobre) faz curvas.", "Cabo energizado da choque!", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
+                "Alavanca no meio do cabo = disjuntor.", "Juncao (bloco de cobre) faz curvas.", "Cabo energizado da choque!",
+                "Poste: muro de pedregulho, madeira e", "cobre talhado no topo. Liga postes", "a ate " + (int) POLE_RANGE + " blocos sem fio.", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
                 "Geradores enchem as baterias da rede.", "Solar e CC: precisa de Inversor na rede.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
@@ -658,6 +669,7 @@ final class Engineer implements Listener {
     static final class Net {
         final List<Device> devs = new ArrayList<>();
         final List<int[]> nodes = new ArrayList<>();
+        final List<double[]> wires = new ArrayList<>();
         int count(String type) { int n = 0; for (Device d : devs) if (d.type.equals(type)) n++; return n; }
     }
 
@@ -735,12 +747,112 @@ final class Engineer implements Listener {
         invalidate();
     }
 
-    void invalidate() { netCache.clear(); pathCache.clear(); lastInvalidate = System.currentTimeMillis(); }
+    static final class Pole {
+        final String world; final int x, z, base, top;
+        Pole(String world, int x, int z, int base, int top) { this.world = world; this.x = x; this.z = z; this.base = base; this.top = top; }
+        String topKey() { return key(world, x, top, z); }
+        String save() { return world + ";" + x + ";" + z + ";" + base + ";" + top; }
+    }
+
+    private final Map<String, Pole> poles = new HashMap<>();        // chave do topo -> poste
+    private final Map<String, String> poleBlocks = new HashMap<>(); // qualquer bloco do poste -> chave do topo
+
+    private static boolean isWood(Material m) {
+        String n = m.name();
+        if (n.contains("NETHER_BRICK")) return false;
+        return n.endsWith("_LOG") || n.endsWith("_WOOD") || n.endsWith("_FENCE") || n.endsWith("_PLANKS")
+                || n.endsWith("_STEM") || n.endsWith("_HYPHAE") || m == Material.BAMBOO_BLOCK;
+    }
+
+    private static boolean isPoleBase(Material m) { return m == Material.COBBLESTONE_WALL || m == Material.MOSSY_COBBLESTONE_WALL; }
+
+    private static boolean isPoleTop(Material m) { return m.name().contains("CHISELED_COPPER"); }
+
+    private void addPole(Pole pl) {
+        poles.put(pl.topKey(), pl);
+        for (int y = pl.base; y <= pl.top; y++) poleBlocks.put(key(pl.world, pl.x, y, pl.z), pl.topKey());
+    }
+
+    private void removePole(Pole pl) {
+        poles.remove(pl.topKey());
+        for (int y = pl.base; y <= pl.top; y++) poleBlocks.remove(key(pl.world, pl.x, y, pl.z));
+        invalidate();
+    }
+
+    /** Confere a estrutura (muro de pedregulho, madeira, cobre talhado). Se quebrou, desmonta o poste. */
+    private boolean validPole(World w, Pole pl) {
+        if (!w.isChunkLoaded(pl.x >> 4, pl.z >> 4)) return true;
+        boolean ok = isPoleTop(w.getBlockAt(pl.x, pl.top, pl.z).getType()) && isPoleBase(w.getBlockAt(pl.x, pl.base, pl.z).getType());
+        for (int y = pl.base + 1; ok && y < pl.top; y++) ok = isWood(w.getBlockAt(pl.x, y, pl.z).getType());
+        if (!ok) removePole(pl);
+        return ok;
+    }
+
+    private List<Pole> linkedPoles(Pole pl) {
+        List<Pole> out = new ArrayList<>();
+        double r2 = POLE_RANGE * POLE_RANGE;
+        for (Pole o : poles.values()) {
+            if (o == pl || !o.world.equals(pl.world)) continue;
+            double dx = o.x - pl.x, dy = o.top - pl.top, dz = o.z - pl.z;
+            if (dx * dx + dy * dy + dz * dz <= r2) out.add(o);
+        }
+        return out;
+    }
+
+    /** Pontos de um fio entre dois postes, com uma barriga no meio. */
+    private static List<double[]> wire(int ax, int ay, int az, int bx, int by, int bz) {
+        List<double[]> out = new ArrayList<>();
+        double sx = ax + 0.5, sy = ay + 1.0, sz = az + 0.5, ex = bx + 0.5, ey = by + 1.0, ez = bz + 0.5;
+        double len = Math.sqrt((ex - sx) * (ex - sx) + (ey - sy) * (ey - sy) + (ez - sz) * (ez - sz));
+        int steps = Math.max(2, (int) (len / 0.5));
+        double sag = len * 0.06;
+        for (int i = 1; i < steps; i++) {
+            double t = (double) i / steps;
+            out.add(new double[]{sx + (ex - sx) * t, sy + (ey - sy) * t - sag * 4 * t * (1 - t), sz + (ez - sz) * t});
+        }
+        return out;
+    }
+
+    /** Vizinhos que conduzem: os 6 lados e, se for topo de poste, os postes ao alcance. */
+    private List<int[]> neighbors(World w, int[] c) {
+        List<int[]> out = new ArrayList<>(8);
+        for (int[] o : DIRS6) {
+            int x = c[0] + o[0], y = c[1] + o[1], z = c[2] + o[2];
+            if (conducts(w, x, y, z)) out.add(new int[]{x, y, z});
+        }
+        Pole pl = poles.get(key(w.getName(), c[0], c[1], c[2]));
+        if (pl != null && validPole(w, pl))
+            for (Pole o : linkedPoles(pl)) out.add(new int[]{o.x, o.top, o.z});
+        return out;
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onPolePlace(BlockPlaceEvent e) {
+        Block top = e.getBlockPlaced();
+        if (!isPoleTop(top.getType())) return;
+        World w = top.getWorld();
+        int y = top.getY() - 1, wood = 0;
+        while (wood < 8 && isWood(w.getBlockAt(top.getX(), y, top.getZ()).getType())) { wood++; y--; }
+        if (wood == 0 || !isPoleBase(w.getBlockAt(top.getX(), y, top.getZ()).getType())) return;
+        Pole pl = new Pole(w.getName(), top.getX(), top.getZ(), y, top.getY());
+        addPole(pl);
+        invalidate();
+        List<Pole> links = linkedPoles(pl);
+        Player p = e.getPlayer();
+        p.sendMessage(Component.text("⚡ Poste montado. Liga em outros postes a ate " + (int) POLE_RANGE + " blocos ("
+                + links.size() + " ao alcance). Puxe energia com cabo ou juncao encostado em qualquer parte dele.", NamedTextColor.AQUA));
+        List<double[]> pts = new ArrayList<>();
+        for (Pole o : links) pts.addAll(wire(pl.x, pl.top, pl.z, o.x, o.top, o.z));
+        for (int k = 0; k < 4; k++)
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) fx.flash(p, pts, Color.fromRGB(80, 230, 255)); }, k * 15L);
+    }
+
+    void invalidate() { netCache.clear(); pathCache.clear(); pointCache.clear(); lastInvalidate = System.currentTimeMillis(); }
 
     /** O bloco conduz energia? cabo, maquina ou alavanca ligada encostada na rede. */
     private boolean conducts(World w, int x, int y, int z) {
         String k = key(w.getName(), x, y, z);
-        if (devices.containsKey(k)) return true;
+        if (devices.containsKey(k) || poleBlocks.containsKey(k)) return true;
         if (cables.contains(k)) {
             if (w.isChunkLoaded(x >> 4, z >> 4) && !cableBlock(w.getBlockAt(x, y, z).getType())) { cables.remove(k); return false; }
             return true;
@@ -765,12 +877,13 @@ final class Engineer implements Listener {
             n.nodes.add(c);
             Device dev = devices.get(key(d.world, c[0], c[1], c[2]));
             if (dev != null) n.devs.add(dev);
-            for (int[] o : DIRS6) {
-                int x = c[0] + o[0], y = c[1] + o[1], z = c[2] + o[2];
-                String k = key(d.world, x, y, z);
-                if (seen.contains(k) || !conducts(w, x, y, z)) continue;
+            for (int[] nb : neighbors(w, c)) {
+                if (Math.abs(nb[0] - c[0]) + Math.abs(nb[1] - c[1]) + Math.abs(nb[2] - c[2]) > 1)
+                    n.wires.addAll(wire(c[0], c[1], c[2], nb[0], nb[1], nb[2])); // fio entre postes
+                String k = key(d.world, nb[0], nb[1], nb[2]);
+                if (seen.contains(k)) continue;
                 seen.add(k);
-                q.add(new int[]{x, y, z});
+                q.add(nb);
             }
         }
         for (Device m : n.devs) netCache.put(m.key(), n);
@@ -778,10 +891,11 @@ final class Engineer implements Listener {
     }
 
     /** Caminho pelos cabos entre duas maquinas da mesma rede (BFS), para o pulso de particulas. */
-    private List<int[]> cablePath(Device a, Device b) {
+    private final Map<String, List<double[]>> pointCache = new HashMap<>();
+
+    private List<double[]> cablePath(Device a, Device b) {
         String pk = a.key() + ">" + b.key();
-        List<int[]> cached = pathCache.get(pk);
-        if (cached != null) return cached;
+        if (pointCache.containsKey(pk)) return pointCache.get(pk);
         World w = Bukkit.getWorld(a.world);
         if (w == null) return null;
         Map<String, String> parent = new HashMap<>();
@@ -793,27 +907,32 @@ final class Engineer implements Listener {
             int[] c = q.poll();
             String ck = key(a.world, c[0], c[1], c[2]);
             if (ck.equals(goal)) break;
-            for (int[] o : DIRS6) {
-                int x = c[0] + o[0], y = c[1] + o[1], z = c[2] + o[2];
-                String k = key(a.world, x, y, z);
+            for (int[] nb : neighbors(w, c)) {
+                String k = key(a.world, nb[0], nb[1], nb[2]);
                 if (parent.containsKey(k)) continue;
-                // maquinas no meio do caminho nao sao atravessadas pelo pulso, so cabos e alavancas
+                // maquinas no meio do caminho nao sao atravessadas pelo pulso
                 if (!k.equals(goal) && devices.containsKey(k)) continue;
-                if (!conducts(w, x, y, z)) continue;
                 parent.put(k, ck);
-                q.add(new int[]{x, y, z});
+                q.add(nb);
             }
         }
-        if (!parent.containsKey(goal)) { pathCache.put(pk, null); return null; }
-        LinkedList<int[]> out = new LinkedList<>();
+        if (!parent.containsKey(goal)) { pointCache.put(pk, null); return null; }
+        LinkedList<int[]> nodes = new LinkedList<>();
         for (String k = goal; !k.isEmpty(); k = parent.get(k)) {
             String[] sp = k.split(":");
             int n = sp.length;
-            out.addFirst(new int[]{Integer.parseInt(sp[n - 3]), Integer.parseInt(sp[n - 2]), Integer.parseInt(sp[n - 1])});
+            nodes.addFirst(new int[]{Integer.parseInt(sp[n - 3]), Integer.parseInt(sp[n - 2]), Integer.parseInt(sp[n - 1])});
         }
-        List<int[]> path = new ArrayList<>(out);
-        pathCache.put(pk, path);
-        return path;
+        List<double[]> pts = new ArrayList<>();
+        int[] prev = null;
+        for (int[] c : nodes) {
+            if (prev != null && Math.abs(c[0] - prev[0]) + Math.abs(c[1] - prev[1]) + Math.abs(c[2] - prev[2]) > 1)
+                pts.addAll(wire(prev[0], prev[1], prev[2], c[0], c[1], c[2]));
+            pts.add(new double[]{c[0] + 0.5, c[1] + 0.5, c[2] + 0.5});
+            prev = c;
+        }
+        pointCache.put(pk, pts);
+        return pts;
     }
 
     private void pulse(Device from, Device to, Color c) {
@@ -996,9 +1115,11 @@ final class Engineer implements Listener {
     }
 
     private void showNet(Player p, Device d) {
-        List<int[]> nodes = net(d).nodes;
+        Net n = net(d);
+        List<double[]> pts = new ArrayList<>(n.wires);
+        for (int[] c : n.nodes) pts.add(new double[]{c[0] + 0.5, c[1] + 0.5, c[2] + 0.5});
         for (int k = 0; k < 4; k++)
-            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) fx.flash(p, nodes, Color.fromRGB(80, 230, 255)); }, k * 15L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) fx.flash(p, pts, Color.fromRGB(80, 230, 255)); }, k * 15L);
     }
 
     @EventHandler
@@ -1462,6 +1583,12 @@ final class Engineer implements Listener {
     private void load() {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(file);
         cables.addAll(y.getStringList("cables"));
+        for (String ps : y.getStringList("poles")) {
+            try {
+                String[] a = ps.split(";");
+                addPole(new Pole(a[0], Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4])));
+            } catch (Exception ex) { plugin.getLogger().warning("poste " + ps + ": " + ex.getMessage()); }
+        }
         ConfigurationSection s = y.getConfigurationSection("devices");
         if (s == null) return;
         for (String k : s.getKeys(false)) {
@@ -1499,6 +1626,7 @@ final class Engineer implements Listener {
             }
         }
         y.set("cables", new ArrayList<>(cables));
+        y.set("poles", poles.values().stream().map(Pole::save).toList());
         try { y.save(file); } catch (IOException ex) { plugin.getLogger().warning("devices.yml: " + ex.getMessage()); }
     }
 }
