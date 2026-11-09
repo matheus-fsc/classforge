@@ -363,9 +363,9 @@ final class Engineer implements Listener {
 
         inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
                 "Receita na mesa de trabalho:", "  _ R _", "  I M I", "  I I I",
-                "R = redstone, I = ferro, M = mesa de trabalho", "", "Clique nela com o direito para", "montar os dispositivos ao lado."));
+                "R = redstone, I = ferro, M = mesa de trabalho", "", "Clique para ver o craft."));
         int slot = 12;
-        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Monte na Bancada de Engenharia"));
+        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Clique para ver o craft"));
 
         Material[] mats = {Material.COPPER_INGOT, Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.NETHERITE_INGOT};
         for (int i = 0; i < 5; i++) {
@@ -413,8 +413,92 @@ final class Engineer implements Listener {
     public void onPanelClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof ClassPanel)) return;
         e.setCancelled(true);
-        if (e.getWhoClicked() instanceof Player p && e.getRawSlot() == 52) plugin.openMenu(p);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        int raw = e.getRawSlot();
+        if (raw == 52) plugin.openMenu(p);
+        else if (raw == 10) openRecipe(p, "bancada");
+        else if (raw >= 12 && raw < 12 + recipes.size()) openRecipe(p, recipes.get(raw - 12).type());
     }
+
+    // ---------- tela de craft de um item ----------
+
+    static final class RecipeView implements InventoryHolder {
+        Inventory inv; String type;
+        @Override public Inventory getInventory() { return inv; }
+    }
+
+    private Recipe recipe(String type) {
+        for (Recipe r : recipes) if (r.type().equals(type)) return r;
+        return null;
+    }
+
+    private static final int[] GRID = {10, 11, 12, 19, 20, 21, 28, 29, 30};
+
+    private ItemStack ingredient(Player p, Material m, int need) {
+        int has = countMat(p, m);
+        ItemStack it = new ItemStack(m, Math.max(1, Math.min(need, m.getMaxStackSize())));
+        ItemMeta meta = it.getItemMeta();
+        meta.displayName(Component.text(need + "x " + pretty(m), has >= need ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        meta.lore(List.of(Component.text("Voce tem " + has, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+        it.setItemMeta(meta);
+        return it;
+    }
+
+    private boolean nearBench(Player p) {
+        for (Device d : devices.values())
+            if (d.type.equals("bancada") && d.world.equals(p.getWorld().getName())
+                    && p.getLocation().distanceSquared(new Location(p.getWorld(), d.x + 0.5, d.y + 0.5, d.z + 0.5)) <= 36) return true;
+        return false;
+    }
+
+    void openRecipe(Player p, String type) {
+        RecipeView h = new RecipeView();
+        h.type = type;
+        Inventory inv = Bukkit.createInventory(h, 45, Component.text("Craft: " + label(type)));
+        h.inv = inv;
+        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
+        for (int i = 0; i < 45; i++) inv.setItem(i, filler);
+        for (int g : GRID) inv.setItem(g, null);
+
+        if (type.equals("bancada")) {
+            // mesma forma da receita na mesa de trabalho
+            Material[] shape = {null, Material.REDSTONE, null,
+                    Material.IRON_INGOT, Material.CRAFTING_TABLE, Material.IRON_INGOT,
+                    Material.IRON_INGOT, Material.IRON_INGOT, Material.IRON_INGOT};
+            for (int i = 0; i < 9; i++) if (shape[i] != null) inv.setItem(GRID[i], ingredient(p, shape[i], 1));
+            inv.setItem(23, icon(Material.CRAFTING_TABLE, "Mesa de trabalho", NamedTextColor.YELLOW,
+                    "Monte nesta forma numa", "mesa de trabalho comum.", "So engenheiros conseguem."));
+        } else {
+            Recipe r = recipe(type);
+            int i = 0;
+            for (Map.Entry<Material, Integer> c : r.cost().entrySet()) inv.setItem(GRID[i++], ingredient(p, c.getKey(), c.getValue()));
+            boolean lvlOk = plugin.level(p.getUniqueId()) >= r.minLevel();
+            boolean near = nearBench(p);
+            List<String> lore = new ArrayList<>();
+            if (!lvlOk) lore.add("Requer Engenheiro nivel " + r.minLevel());
+            else if (!near) { lore.add("Chegue perto de uma"); lore.add("Bancada de Engenharia (6 blocos)."); }
+            else lore.add("Clique para montar");
+            inv.setItem(23, icon(lvlOk && near ? Material.LIME_CONCRETE : Material.RED_CONCRETE,
+                    "Montar", lvlOk && near ? NamedTextColor.GREEN : NamedTextColor.RED, lore.toArray(new String[0])));
+        }
+        inv.setItem(25, item(type));
+        inv.setItem(36, icon(Material.ARROW, "Voltar", NamedTextColor.WHITE, "Volta para o painel da classe."));
+        p.openInventory(inv);
+    }
+
+    @EventHandler
+    public void onRecipeClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof RecipeView h)) return;
+        e.setCancelled(true);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (e.getRawSlot() == 36) { openPanel(p); return; }
+        if (e.getRawSlot() != 23 || h.type.equals("bancada")) return;
+        if (!nearBench(p)) { p.sendMessage(Component.text("Chegue perto de uma Bancada de Engenharia.", NamedTextColor.RED)); return; }
+        if (craft(p, recipe(h.type))) openRecipe(p, h.type);
+    }
+
+    @EventHandler
+    public void onRecipeDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof RecipeView) e.setCancelled(true); }
 
     @EventHandler
     public void onPanelDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof ClassPanel) e.setCancelled(true); }
@@ -451,19 +535,22 @@ final class Engineer implements Listener {
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int idx = e.getRawSlot() - 10;
         if (idx < 0 || idx >= recipes.size()) return;
-        Recipe r = recipes.get(idx);
-        if (plugin.level(p.getUniqueId()) < r.minLevel()) { p.sendMessage(Component.text("Requer Engenheiro nivel " + r.minLevel() + ".", NamedTextColor.RED)); return; }
+        if (craft(p, recipes.get(idx))) openBench(p);
+    }
+
+    private boolean craft(Player p, Recipe r) {
+        if (plugin.level(p.getUniqueId()) < r.minLevel()) { p.sendMessage(Component.text("Requer Engenheiro nivel " + r.minLevel() + ".", NamedTextColor.RED)); return false; }
         for (Map.Entry<Material, Integer> c : r.cost().entrySet())
             if (countMat(p, c.getKey()) < c.getValue()) {
                 p.sendMessage(Component.text("Falta " + pretty(c.getKey()) + ".", NamedTextColor.RED));
                 p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
-                return;
+                return false;
             }
         for (Map.Entry<Material, Integer> c : r.cost().entrySet()) takeMat(p, c.getKey(), c.getValue());
         for (ItemStack left : p.getInventory().addItem(item(r.type())).values()) p.getWorld().dropItemNaturally(p.getLocation(), left);
         p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1f);
         plugin.addXp(p.getUniqueId(), 3);
-        openBench(p);
+        return true;
     }
 
     @EventHandler
