@@ -54,6 +54,7 @@ final class Engineer implements Listener {
         final String type; final String world; final int x, y, z; final UUID owner;
         double energy, lastRate; int burn; long nextShot;
         TextDisplay tag;
+        boolean tagOn = true; int filter = 0b111111; int prio; int ammoPref;
         Device(String type, String world, int x, int y, int z, UUID owner) {
             this.type = type; this.world = world; this.x = x; this.y = y; this.z = z; this.owner = owner;
         }
@@ -73,6 +74,7 @@ final class Engineer implements Listener {
     private final Map<UUID, double[]> lastPos = new HashMap<>(); // x, y, z, tick
     private final File file;
     private long tick;
+    private EnergyFx fx;
     private final List<Recipe> recipes = new ArrayList<>();
 
     Engineer(BabylonClasses plugin) {
@@ -96,6 +98,7 @@ final class Engineer implements Listener {
 
     void enable() {
         load();
+        fx = new EnergyFx(plugin);
         ShapedRecipe r = new ShapedRecipe(recipeKey, item("bancada"));
         r.shape(" R ", "ICI", "III");
         r.setIngredient('R', Material.REDSTONE);
@@ -281,10 +284,10 @@ final class Engineer implements Listener {
                 showRange(p, d, LINK_RANGE, Color.fromRGB(255, 200, 40));
             }
             case "torre" -> {
-                World w = e.getClickedBlock().getWorld();
-                int[] am = ammo(e.getClickedBlock());
-                p.sendActionBar(Component.text("Torre (nivel " + plugin.level(d.owner) + "): " + (int) networkEnergy(d, w) + " energia na rede, " + am[0] + " flechas, " + am[1] + " bolas de fogo", NamedTextColor.GOLD));
-                showRange(p, d, RANGE[plugin.level(d.owner) - 1], Color.fromRGB(230, 60, 40));
+                ItemStack hand = p.getInventory().getItemInMainHand();
+                if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return; // agachado com bloco: deixa colocar
+                e.setCancelled(true);
+                openTurret(p, d);
             }
         }
     }
@@ -397,6 +400,9 @@ final class Engineer implements Listener {
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
                 "Flechas ou bolas de fogo dentro da torre,", "ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
                 "Aceita flecha com efeito e espectral.", "Nunca acerta jogador, pet ou animal."));
+        boolean fxOn = plugin.fxEnabled(p);
+        inv.setItem(8, icon(fxOn ? Material.GLOWSTONE_DUST : Material.GUNPOWDER, "Particulas de energia: " + (fxOn ? "ligadas" : "desligadas"),
+                fxOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Mostra a energia correndo pelos", "cabos ate as maquinas.", "", "Clique para " + (fxOn ? "desligar" : "ligar") + "."));
         inv.setItem(52, icon(Material.ENDER_EYE, "Trocar de classe", NamedTextColor.LIGHT_PURPLE,
                 "Custa " + BabylonClasses.CHANGE_COST_LEVELS + " niveis de XP.", "Zera o nivel da classe."));
         p.openInventory(inv);
@@ -416,6 +422,7 @@ final class Engineer implements Listener {
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int raw = e.getRawSlot();
         if (raw == 52) plugin.openMenu(p);
+        else if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
         else if (raw == 10) openRecipe(p, "bancada");
         else if (raw >= 12 && raw < 12 + recipes.size()) openRecipe(p, recipes.get(raw - 12).type());
     }
@@ -639,6 +646,8 @@ final class Engineer implements Listener {
                 double move = Math.min(g.energy, bt.cap() - bt.energy);
                 if (move <= 0) continue;
                 g.energy -= move; bt.energy += move;
+                World gw = Bukkit.getWorld(g.world);
+                if (gw != null) fx.pulse(gw, g.x, g.y, g.z, bt.x, bt.y, bt.z, Color.fromRGB(255, 210, 40));
                 if (g.energy <= 0) break;
             }
         }
@@ -669,9 +678,12 @@ final class Engineer implements Listener {
         double total = 0;
         for (Device d : src) total += d.energy;
         if (total < amount) return false;
+        World w = Bukkit.getWorld(t.world);
         for (Device d : src) {
             double take = Math.min(d.energy, amount);
+            if (take <= 0) continue;
             d.energy -= take; amount -= take;
+            if (w != null) fx.pulse(w, d.x, d.y, d.z, t.x, t.y, t.z, Color.fromRGB(255, 120, 30));
             if (amount <= 0) break;
         }
         return true;
@@ -720,24 +732,44 @@ final class Engineer implements Listener {
             if (!(b.getState() instanceof Container cont)) continue;
             ItemStack ammo = null; int slot = -1;
             ItemStack[] inv = cont.getInventory().getContents();
-            for (int i = 0; i < inv.length; i++) if (inv[i] != null && isAmmo(inv[i].getType())) { ammo = inv[i]; slot = i; break; }
+            for (int pass = 0; pass < 2 && ammo == null; pass++)
+                for (int i = 0; i < inv.length; i++) {
+                    if (inv[i] == null || !isAmmo(inv[i].getType())) continue;
+                    boolean fire = inv[i].getType() == Material.FIRE_CHARGE;
+                    boolean wanted = t.ammoPref == 0 || (t.ammoPref == 1 && !fire) || (t.ammoPref == 2 && fire);
+                    if (pass == 0 && !wanted) continue; // primeiro a preferida, depois qualquer uma
+                    ammo = inv[i]; slot = i; break;
+                }
             if (ammo == null) { t.nextShot = tick + 40; continue; }
             boolean fireball = ammo.getType() == Material.FIRE_CHARGE;
             double speed = fireball ? 1.8 : 2.6;
 
-            LivingEntity best = null; Vector bestAim = null; double bestD = Double.MAX_VALUE;
+            List<LivingEntity> cands = new ArrayList<>();
             for (Entity en : w.getNearbyEntities(c, range, range, range)) {
                 if (!(en instanceof LivingEntity le) || !hostile(le)) continue;
-                double dd = le.getLocation().distanceSquared(c);
-                if (dd > range * range || dd >= bestD) continue;
-                Vector aim = aimPoint(le, c, speed, !fireball);
-                Vector dir = aim.clone().subtract(c.toVector());
-                if (dir.lengthSquared() < 0.01) continue;
-                Location muzzle = c.clone().add(dir.clone().normalize().multiply(0.8));
-                Vector toEye = le.getEyeLocation().toVector().subtract(muzzle.toVector());
-                RayTraceResult hit = w.rayTraceBlocks(muzzle, toEye.clone().normalize(), toEye.length(), FluidCollisionMode.NEVER, true);
+                if ((t.filter & (1 << category(le))) == 0) continue;
+                if (le.getLocation().distanceSquared(c) > range * range) continue;
+                cands.add(le);
+            }
+            if (cands.isEmpty()) continue;
+            Comparator<LivingEntity> byDist = Comparator.comparingDouble(le -> le.getLocation().distanceSquared(c));
+            cands.sort(switch (t.prio) {
+                case 1 -> Comparator.<LivingEntity>comparingDouble(LivingEntity::getHealth).thenComparing(byDist);
+                case 2 -> Comparator.<LivingEntity>comparingDouble(le -> -le.getHealth()).thenComparing(byDist);
+                default -> byDist;
+            });
+            LivingEntity best = null; Vector bestAim = null;
+            int checks = 0;
+            for (LivingEntity le : cands) {
+                if (checks++ >= 8) break;
+                Vector toEye = le.getEyeLocation().toVector().subtract(c.toVector());
+                if (toEye.lengthSquared() < 0.01) continue;
+                Location muzzle = c.clone().add(toEye.clone().normalize().multiply(0.8));
+                Vector fromMuzzle = le.getEyeLocation().toVector().subtract(muzzle.toVector());
+                RayTraceResult hit = w.rayTraceBlocks(muzzle, fromMuzzle.clone().normalize(), fromMuzzle.length(), FluidCollisionMode.NEVER, true);
                 if (hit != null) continue;
-                best = le; bestAim = aim; bestD = dd;
+                best = le; bestAim = aimPoint(le, c, speed, !fireball);
+                break;
             }
             if (best == null) continue;
             if (!drain(t, fireball ? FIREBALL_COST : SHOT_COST)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
@@ -872,26 +904,170 @@ final class Engineer implements Listener {
         }
     }
 
+    /** Agrupa paineis solares encostados (inclusive diagonal): o lider fica com a etiqueta do grupo. */
+    private Map<Device, List<Device>> solarClusters(Set<Device> followers) {
+        Map<Device, List<Device>> out = new HashMap<>();
+        Set<Device> seen = new HashSet<>();
+        for (Device d : devices.values()) {
+            if (!d.type.equals("solar") || seen.contains(d)) continue;
+            List<Device> group = new ArrayList<>();
+            ArrayDeque<Device> q = new ArrayDeque<>(List.of(d));
+            seen.add(d);
+            while (!q.isEmpty()) {
+                Device c = q.poll();
+                group.add(c);
+                for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) {
+                    Device n = devices.get(c.world + ":" + (c.x + dx) + ":" + (c.y + dy) + ":" + (c.z + dz));
+                    if (n != null && n.type.equals("solar") && seen.add(n)) q.add(n);
+                }
+            }
+            group.sort(Comparator.comparingInt((Device g) -> g.x).thenComparingInt(g -> g.z).thenComparingInt(g -> g.y));
+            out.put(group.get(0), group);
+            for (int i = 1; i < group.size(); i++) followers.add(group.get(i));
+        }
+        return out;
+    }
+
+    private Component solarText(List<Device> g) {
+        double e = 0, cap = 0, rate = 0;
+        for (Device d : g) { e += d.energy; cap += d.cap(); rate += d.lastRate; }
+        Component nl = Component.newline();
+        String title = g.size() == 1 ? "Painel Solar" : "Paineis Solares x" + g.size();
+        return Component.text(title, NamedTextColor.GOLD, TextDecoration.BOLD)
+                .append(nl).append(Component.text("⚡ " + (int) e + "/" + (int) cap + "  ", NamedTextColor.YELLOW)
+                        .append(Component.text(bar(e, cap), e > 0 ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY)))
+                .append(nl).append(rate > 0 ? Component.text(String.format(Locale.ROOT, "+%.1f/s", rate), NamedTextColor.GREEN)
+                        : Component.text("parado (noite ou sombra)", NamedTextColor.RED))
+                .append(nl).append(Component.text("alcance " + (int) LINK_RANGE + " blocos", NamedTextColor.GRAY));
+    }
+
     private void updateTags() {
+        Set<Device> followers = new HashSet<>();
+        Map<Device, List<Device>> clusters = solarClusters(followers);
         for (Device d : devices.values()) {
             World w = Bukkit.getWorld(d.world);
             if (!loaded(d, w)) { d.tag = null; continue; }
+            if (followers.contains(d) || (d.type.equals("torre") && !d.tagOn)) { removeTag(d); continue; }
             Block b = w.getBlockAt(d.x, d.y, d.z);
-            Component text = tagText(d, b, w);
+            Location at = new Location(w, d.x + 0.5, d.y + 1.55, d.z + 0.5);
+            Component text;
+            List<Device> group = clusters.get(d);
+            if (group != null) {
+                double sx = 0, sz = 0; int maxY = d.y;
+                for (Device g : group) { sx += g.x + 0.5; sz += g.z + 0.5; maxY = Math.max(maxY, g.y); }
+                at = new Location(w, sx / group.size(), maxY + 0.9, sz / group.size());
+                text = solarText(group);
+            } else text = tagText(d, b, w);
             if (d.tag == null || !d.tag.isValid()) {
-                double h = d.type.equals("solar") ? 0.9 : 1.55;
-                d.tag = w.spawn(new Location(w, d.x + 0.5, d.y + h, d.z + 0.5), TextDisplay.class, td -> {
+                Component tx = text;
+                d.tag = w.spawn(at, TextDisplay.class, td -> {
                     td.setPersistent(false);
                     td.setBillboard(Display.Billboard.CENTER);
                     td.setShadowed(true);
                     td.setViewRange(0.35f);
                     td.setBackgroundColor(Color.fromARGB(90, 0, 0, 0));
                     td.setAlignment(TextDisplay.TextAlignment.CENTER);
-                    td.text(text);
+                    td.text(tx);
                 });
-            } else d.tag.text(text);
+            } else {
+                d.tag.text(text);
+                if (d.tag.getLocation().distanceSquared(at) > 0.01) d.tag.teleport(at);
+            }
         }
     }
+
+    // ---------- menu da torre ----------
+
+    static final String[] CATS = {"Zumbis", "Esqueletos", "Creepers", "Aranhas", "Mobs do Nether", "Outros"};
+    static final Material[] CAT_ICON = {Material.ZOMBIE_HEAD, Material.SKELETON_SKULL, Material.CREEPER_HEAD,
+            Material.SPIDER_EYE, Material.BLAZE_POWDER, Material.PHANTOM_MEMBRANE};
+    static final String[] PRIOS = {"Mais perto", "Menos vida", "Mais vida"};
+    static final String[] AMMOS = {"Qualquer", "Flechas", "Bolas de fogo"};
+
+    static int category(LivingEntity e) {
+        if (e instanceof PigZombie || e instanceof PiglinAbstract || e instanceof Blaze || e instanceof Ghast
+                || e instanceof MagmaCube || e instanceof Hoglin || e instanceof Zoglin) return 4;
+        if (e instanceof Zombie) return 0;
+        if (e instanceof AbstractSkeleton) return 1;
+        if (e instanceof Creeper) return 2;
+        if (e instanceof Spider) return 3;
+        return 5;
+    }
+
+    static final class TurretMenu implements InventoryHolder {
+        Inventory inv; String key;
+        @Override public Inventory getInventory() { return inv; }
+    }
+
+    void openTurret(Player p, Device d) {
+        World w = Bukkit.getWorld(d.world);
+        if (w == null) return;
+        TurretMenu h = new TurretMenu();
+        h.key = d.key();
+        Inventory inv = Bukkit.createInventory(h, 45, Component.text("Torre Sentinela"));
+        h.inv = inv;
+        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
+        for (int i = 0; i < 45; i++) inv.setItem(i, filler);
+        Block b = w.getBlockAt(d.x, d.y, d.z);
+        int lvl = plugin.level(d.owner);
+        int[] am = ammo(b);
+        OfflinePlayer owner = Bukkit.getOfflinePlayer(d.owner);
+        double net = networkEnergy(d, w);
+
+        inv.setItem(4, icon(Material.DISPENSER, "Torre Sentinela", NamedTextColor.GOLD,
+                "Dono: " + (owner.getName() == null ? "?" : owner.getName()) + " (Engenheiro nivel " + lvl + ")",
+                "Alcance " + RANGE[lvl - 1] + " blocos, " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[lvl - 1]) + " tiros/s",
+                "Energia na rede: " + (int) net));
+        inv.setItem(10, icon(Material.CHEST, "Municao", NamedTextColor.WHITE,
+                am[0] + " flechas, " + am[1] + " bolas de fogo", "", "Clique para abrir e colocar", "flechas ou bolas de fogo."));
+        Material am2 = d.ammoPref == 2 ? Material.FIRE_CHARGE : d.ammoPref == 1 ? Material.ARROW : Material.BOW;
+        inv.setItem(12, icon(am2, "Municao preferida: " + AMMOS[d.ammoPref], NamedTextColor.YELLOW,
+                "Usa esta primeiro. Se acabar,", "usa a outra.", "", "Clique para trocar."));
+        inv.setItem(14, icon(Material.TARGET, "Prioridade: " + PRIOS[d.prio], NamedTextColor.YELLOW,
+                "Qual alvo a torre escolhe", "entre os que estao a vista.", "", "Clique para trocar."));
+        inv.setItem(16, icon(d.tagOn ? Material.NAME_TAG : Material.PAPER, "Etiqueta: " + (d.tagOn ? "ligada" : "desligada"),
+                d.tagOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Texto flutuante com municao", "e energia em cima da torre.", "", "Clique para " + (d.tagOn ? "desligar" : "ligar") + "."));
+        for (int i = 0; i < CATS.length; i++) {
+            boolean on = (d.filter & (1 << i)) != 0;
+            inv.setItem(28 + i + (i >= 3 ? 1 : 0), icon(on ? CAT_ICON[i] : Material.BARRIER, CATS[i] + ": " + (on ? "atirando" : "ignorando"),
+                    on ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (on ? "ignorar" : "atirar") + "."));
+        }
+        inv.setItem(22, icon(Material.OAK_SIGN, "Filtro de mobs", NamedTextColor.WHITE, "Escolha abaixo em quem", "a torre atira."));
+        inv.setItem(40, icon(Material.ENDER_EYE, "Mostrar alcance", NamedTextColor.LIGHT_PURPLE, "Desenha o alcance no chao", "por 3 segundos."));
+        p.openInventory(inv);
+    }
+
+    @EventHandler
+    public void onTurretClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof TurretMenu h)) return;
+        e.setCancelled(true);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        Device d = devices.get(h.key);
+        if (d == null) { p.closeInventory(); return; }
+        World w = Bukkit.getWorld(d.world);
+        int raw = e.getRawSlot();
+        switch (raw) {
+            case 10 -> {
+                if (w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) p.openInventory(c.getInventory());
+                return;
+            }
+            case 12 -> d.ammoPref = (d.ammoPref + 1) % AMMOS.length;
+            case 14 -> d.prio = (d.prio + 1) % PRIOS.length;
+            case 16 -> d.tagOn = !d.tagOn;
+            case 40 -> { p.closeInventory(); showRange(p, d, RANGE[plugin.level(d.owner) - 1], Color.fromRGB(230, 60, 40)); return; }
+            default -> {
+                int i = raw - 28;
+                if (i >= 4) i--; // slot 31 e o espaco do meio
+                if (raw == 31 || i < 0 || i >= CATS.length) return;
+                d.filter ^= 1 << i;
+            }
+        }
+        p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);
+        openTurret(p, d);
+    }
+
+    @EventHandler
+    public void onTurretDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof TurretMenu) e.setCancelled(true); }
 
     /** Desenha um circulo de particulas so para o jogador, por 3 segundos. */
     private void showRange(Player p, Device d, double r, Color color) {
@@ -938,6 +1114,10 @@ final class Engineer implements Listener {
                         UUID.fromString(c.getString("owner")));
                 d.energy = c.getDouble("energy");
                 d.burn = c.getInt("burn");
+                d.tagOn = c.getBoolean("tag", true);
+                d.filter = c.getInt("filter", 0b111111);
+                d.prio = c.getInt("prio");
+                d.ammoPref = c.getInt("ammo");
                 devices.put(d.key(), d);
             } catch (Exception ex) { plugin.getLogger().warning("device " + k + ": " + ex.getMessage()); }
         }
@@ -953,6 +1133,10 @@ final class Engineer implements Listener {
             y.set(k + ".owner", d.owner.toString());
             y.set(k + ".energy", Math.round(d.energy * 10) / 10.0);
             y.set(k + ".burn", d.burn);
+            if (d.type.equals("torre")) {
+                y.set(k + ".tag", d.tagOn); y.set(k + ".filter", d.filter);
+                y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);
+            }
         }
         try { y.save(file); } catch (IOException ex) { plugin.getLogger().warning("devices.yml: " + ex.getMessage()); }
     }

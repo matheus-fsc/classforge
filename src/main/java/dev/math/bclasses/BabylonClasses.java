@@ -56,6 +56,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     static final int CHANGE_COST_LEVELS = 30;
 
     private final Map<UUID, PData> players = new HashMap<>();
+    private final Set<UUID> fxOff = new HashSet<>();
     private File playersFile;
     Engineer engineer;
 
@@ -87,6 +88,16 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
 
     static boolean isRunWorld(World w) {
         return w != null && baseOf(w.getName()).startsWith("hc_");
+    }
+
+    boolean fxEnabled(Player p) { return !fxOff.contains(p.getUniqueId()); }
+
+    void toggleFx(Player p) {
+        boolean on = !fxOff.remove(p.getUniqueId());
+        if (on) fxOff.add(p.getUniqueId());
+        boolean enabled = !on;
+        p.sendMessage(Component.text("⚡ Particulas de energia " + (enabled ? "ligadas" : "desligadas") + ".", enabled ? NamedTextColor.GREEN : NamedTextColor.GRAY));
+        savePlayers();
     }
 
     PData data(UUID id) { return players.computeIfAbsent(id, k -> new PData()); }
@@ -123,7 +134,9 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
 
     private void loadPlayers() {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(playersFile);
+        for (String u : y.getStringList("fx-off")) { try { fxOff.add(UUID.fromString(u)); } catch (Exception ignored) { } }
         for (String k : y.getKeys(false)) {
+            if (k.equals("fx-off")) continue;
             try {
                 PData d = new PData();
                 String c = y.getString(k + ".class");
@@ -145,6 +158,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             y.set(k + ".world", d.world);
             y.set(k + ".xp", d.xp);
         }
+        y.set("fx-off", fxOff.stream().map(UUID::toString).toList());
         try { y.save(playersFile); } catch (IOException ex) { getLogger().warning("players.yml: " + ex.getMessage()); }
     }
 
@@ -277,6 +291,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             return true;
         }
         if (a.length >= 1 && a[0].equalsIgnoreCase("trocar")) { openMenu(p); return true; }
+        if (a.length >= 1 && a[0].equalsIgnoreCase("particulas")) { toggleFx(p); return true; }
         if (classOf(p) == PClass.ENGENHEIRO) { engineer.openPanel(p); return true; }
         openMenu(p);
         return true;
@@ -285,7 +300,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     @Override
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
-            List<String> o = new ArrayList<>(List.of("info", "trocar"));
+            List<String> o = new ArrayList<>(List.of("info", "trocar", "particulas"));
             if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); }
             return o;
         }
