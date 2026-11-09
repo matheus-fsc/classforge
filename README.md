@@ -1,6 +1,6 @@
-# BabylonClasses
+# HardcoreRoulette Addon: Classes
 
-Plugin Paper de **habilidades por nivel** para servidores hardcore em grupo. Ninguem escolhe classe: qualquer jogador pode fazer tudo, e o nivel de cada habilidade e o que libera mais coisas. Os niveis zeram quando a vida acaba (o XP fica preso ao mundo `hc_*` em que foi ganho).
+Addon do HardcoreRoulette (plugin interno: BabylonClasses). Plugin Paper de **habilidades por nivel** para servidores hardcore em grupo. Ninguem escolhe classe: qualquer jogador pode fazer tudo, e o nivel de cada habilidade e o que libera mais coisas. Os niveis zeram quando a vida acaba (o XP fica preso ao mundo `hc_*` em que foi ganho).
 
 Feito para **Paper 26.3** (Java 25). Mensagens em portugues (pt-BR). Pensado para rodar junto com o [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette).
 
