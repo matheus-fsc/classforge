@@ -296,27 +296,119 @@ final class Engineer implements Listener {
         BenchMenu h = new BenchMenu();
         Inventory inv = Bukkit.createInventory(h, 27, Component.text("Bancada de Engenharia"));
         h.inv = inv;
-        int lvl = plugin.level(p.getUniqueId());
         int slot = 10;
-        for (Recipe r : recipes) {
-            ItemStack it = item(r.type());
-            ItemMeta m = it.getItemMeta();
-            List<Component> lore = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
-            lore.add(Component.empty());
-            lore.add(Component.text("Custo:", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
-            for (Map.Entry<Material, Integer> c : r.cost().entrySet()) {
-                boolean has = countMat(p, c.getKey()) >= c.getValue();
-                lore.add(Component.text(" " + c.getValue() + "x " + pretty(c.getKey()), has ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
-            }
-            if (lvl < r.minLevel()) lore.add(Component.text("Requer nivel " + r.minLevel(), NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
-            else lore.add(Component.text("Clique para montar", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
-            m.lore(lore);
-            it.setItemMeta(m);
-            inv.setItem(slot, it);
-            slot += 1;
-        }
+        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Clique para montar"));
         p.openInventory(inv);
     }
+
+    private ItemStack recipeIcon(Player p, Recipe r, String action) {
+        int lvl = plugin.level(p.getUniqueId());
+        ItemStack it = item(r.type());
+        ItemMeta m = it.getItemMeta();
+        List<Component> lore = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
+        lore.add(Component.empty());
+        lore.add(Component.text("Custo:", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+        for (Map.Entry<Material, Integer> c : r.cost().entrySet()) {
+            boolean has = countMat(p, c.getKey()) >= c.getValue();
+            lore.add(Component.text(" " + c.getValue() + "x " + pretty(c.getKey()), has ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        }
+        if (lvl < r.minLevel()) lore.add(Component.text("Requer nivel " + r.minLevel(), NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        else lore.add(Component.text(action, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+        m.lore(lore);
+        it.setItemMeta(m);
+        return it;
+    }
+
+    // ---------- painel da classe (/classe) ----------
+
+    static final class ClassPanel implements InventoryHolder {
+        Inventory inv;
+        @Override public Inventory getInventory() { return inv; }
+    }
+
+    private static ItemStack icon(Material mat, String name, NamedTextColor color, String... lore) {
+        ItemStack it = new ItemStack(mat);
+        ItemMeta m = it.getItemMeta();
+        m.displayName(Component.text(name, color, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+        List<Component> l = new ArrayList<>();
+        for (String s : lore) l.add(Component.text(s, s.startsWith("+") ? NamedTextColor.GREEN : NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        m.lore(l);
+        m.addItemFlags(ItemFlag.values());
+        it.setItemMeta(m);
+        return it;
+    }
+
+    void openPanel(Player p) {
+        ClassPanel h = new ClassPanel();
+        Inventory inv = Bukkit.createInventory(h, 54, Component.text("Engenheiro"));
+        h.inv = inv;
+        UUID id = p.getUniqueId();
+        int lvl = plugin.level(id), xp = plugin.data(id).xp;
+        String w = p.getWorld().getName();
+        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
+        for (int i = 0; i < 54; i++) inv.setItem(i, filler);
+
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
+        inv.setItem(4, icon(Material.DISPENSER, "Engenheiro - nivel " + lvl, NamedTextColor.GOLD,
+                next, "", "Ganha XP montando na bancada (+3)", "e com abates das suas torres (+1).", "", "A classe zera quando voce morre."));
+
+        inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
+                "Receita na mesa de trabalho:", "  _ R _", "  I M I", "  I I I",
+                "R = redstone, I = ferro, M = mesa de trabalho", "", "Clique nela com o direito para", "montar os dispositivos ao lado."));
+        int slot = 12;
+        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Monte na Bancada de Engenharia"));
+
+        Material[] mats = {Material.COPPER_INGOT, Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.NETHERITE_INGOT};
+        for (int i = 0; i < 5; i++) {
+            int L = i + 1;
+            boolean got = lvl >= L;
+            List<String> lore = new ArrayList<>();
+            lore.add(L == 1 ? "Inicial" : "Precisa de " + BabylonClasses.LEVEL_XP[i] + " XP");
+            lore.add("");
+            lore.add("+ Ate " + MAX_TURRETS[i] + " torres");
+            lore.add("+ Alcance " + RANGE[i] + " blocos");
+            lore.add("+ " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[i]) + " tiros por segundo");
+            if (L == 2) lore.add("+ Libera Geotermico e Bateria");
+            if (L == 3) lore.add("+ Flecha de fogo (30%)");
+            if (L == 5) lore.add("+ Tiro duplo");
+            lore.add("");
+            lore.add(got ? "Liberado" : "Bloqueado");
+            inv.setItem(29 + i, icon(got ? mats[i] : Material.BLACK_STAINED_GLASS_PANE, "Nivel " + L, got ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY, lore.toArray(new String[0])));
+        }
+
+        inv.setItem(46, icon(Material.REDSTONE, "Sua base", NamedTextColor.RED,
+                "Torres: " + count(id, w, true) + "/" + MAX_TURRETS[lvl - 1],
+                "Geradores e baterias: " + count(id, w, false) + "/" + MAX_POWER_DEVICES,
+                "Energia guardada: " + (int) storedEnergy(id, w)));
+        inv.setItem(48, icon(Material.LIGHTNING_ROD, "Como funciona a energia", NamedTextColor.YELLOW,
+                "Sem fios: geradores e baterias a ate " + (int) LINK_RANGE,
+                "blocos alimentam a torre.", "Cada tiro gasta " + (int) SHOT_COST + " de energia.",
+                "Geradores enchem as baterias proximas.", "",
+                "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
+        inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
+                "Coloque flechas dentro da torre", "ou abasteca com funil.",
+                "Aceita flecha com efeito e espectral.", "Nunca acerta jogador, pet ou animal."));
+        inv.setItem(52, icon(Material.ENDER_EYE, "Trocar de classe", NamedTextColor.LIGHT_PURPLE,
+                "Custa " + BabylonClasses.CHANGE_COST_LEVELS + " niveis de XP.", "Zera o nivel da classe."));
+        p.openInventory(inv);
+    }
+
+    private double storedEnergy(UUID owner, String world) {
+        String base = BabylonClasses.baseOf(world);
+        double s = 0;
+        for (Device d : devices.values()) if (d.owner.equals(owner) && d.isSource() && BabylonClasses.baseOf(d.world).equals(base)) s += d.energy;
+        return s;
+    }
+
+    @EventHandler
+    public void onPanelClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof ClassPanel)) return;
+        e.setCancelled(true);
+        if (e.getWhoClicked() instanceof Player p && e.getRawSlot() == 52) plugin.openMenu(p);
+    }
+
+    @EventHandler
+    public void onPanelDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof ClassPanel) e.setCancelled(true); }
 
     private static String pretty(Material m) {
         String s = m.name().toLowerCase(Locale.ROOT).replace('_', ' ');

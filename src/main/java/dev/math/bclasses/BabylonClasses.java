@@ -276,6 +276,8 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             if (c == PClass.ENGENHEIRO) p.sendMessage(Component.text(engineer.status(p), NamedTextColor.GRAY));
             return true;
         }
+        if (a.length >= 1 && a[0].equalsIgnoreCase("trocar")) { openMenu(p); return true; }
+        if (classOf(p) == PClass.ENGENHEIRO) { engineer.openPanel(p); return true; }
         openMenu(p);
         return true;
     }
@@ -283,7 +285,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     @Override
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
-            List<String> o = new ArrayList<>(List.of("info"));
+            List<String> o = new ArrayList<>(List.of("info", "trocar"));
             if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); }
             return o;
         }
