@@ -1,11 +1,11 @@
 name: BabylonClasses
-version: 0.1.0
+version: 0.2.0
 main: dev.math.bclasses.BabylonClasses
 api-version: "26.3"
-description: Classes por vida (Explorador, Engenheiro, Coletor) para o BABYLON FLAMES.
+description: Habilidades por nivel (Engenharia) para o BABYLON FLAMES.
 softdepend: [HardcoreRoulette, AuraSkills]
 commands:
   classe:
-    description: Escolhe ou mostra sua classe
-    usage: /classe [info|admin <jogador> <nivel>|dar <item>]
-    aliases: [classes, class]
+    description: Abre o painel de Engenharia
+    usage: /classe [info|particulas|admin <jogador> <nivel>|dar <item>]
+    aliases: [classes, class, engenharia, habilidades]

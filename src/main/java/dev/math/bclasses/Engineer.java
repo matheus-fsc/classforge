@@ -1,6 +1,5 @@
 package dev.math.bclasses;
 
-import dev.math.bclasses.BabylonClasses.PClass;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -39,7 +38,7 @@ import java.util.*;
 /** Engenheiro: bancada, torres sentinela, geradores (carvao, geotermico, solar) e bateria. */
 final class Engineer implements Listener {
 
-    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao"};
+    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano"};
 
     // por nivel 1..5
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
@@ -54,10 +53,13 @@ final class Engineer implements Listener {
     static final double INVERTER_EFF = 0.9;
     static final int MAX_NET_NODES = 4096;
     static final double POLE_RANGE = 24;
+    /** Tiros que um cano aguenta (bola de fogo gasta 2). */
+    static final int BARREL_MAX = 300;
+    static final int XP_CRAFT = 3, XP_REPAIR = 5, XP_KILL = 1;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
-        double energy, lastRate; int burn; long nextShot; boolean powered;
+        double energy, lastRate; int burn; long nextShot; boolean powered; int barrel = BARREL_MAX;
         TextDisplay tag;
         boolean tagOn = true, enabled = true; int filter = 0b111111; int prio; int ammoPref; int mode;
         Device(String type, String world, int x, int y, int z, UUID owner) {
@@ -76,7 +78,7 @@ final class Engineer implements Listener {
     }
 
     private final BabylonClasses plugin;
-    private final NamespacedKey devKey, arrowKey, recipeKey;
+    private final NamespacedKey devKey, arrowKey, recipeKey, barrelKey;
     private final Map<String, Device> devices = new HashMap<>();
     private final Map<UUID, double[]> lastPos = new HashMap<>(); // x, y, z, tick
     private final File file;
@@ -90,13 +92,15 @@ final class Engineer implements Listener {
         this.devKey = new NamespacedKey(plugin, "device");
         this.arrowKey = new NamespacedKey(plugin, "turret-arrow");
         this.recipeKey = new NamespacedKey(plugin, "bancada");
+        this.barrelKey = new NamespacedKey(plugin, "barrel");
         this.file = new File(plugin.getDataFolder(), "devices.yml");
-        recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.BOW, 1, Material.IRON_INGOT, 4, Material.REDSTONE, 4)));
+        recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.CROSSBOW, 1, Material.IRON_BLOCK, 4, Material.REDSTONE_BLOCK, 4)));
+        recipes.add(new Recipe("cano", 1, costs(Material.IRON_BLOCK, 2, Material.REDSTONE_BLOCK, 1, Material.COPPER_BLOCK, 1)));
         recipes.add(new Recipe("carvao", 1, costs(Material.FURNACE, 1, Material.IRON_INGOT, 4, Material.COPPER_INGOT, 2, Material.REDSTONE, 2)));
         recipes.add(new Recipe("solar", 1, costs(Material.DAYLIGHT_DETECTOR, 1, Material.COPPER_INGOT, 4, Material.GLASS, 2, Material.REDSTONE, 2)));
         recipes.add(new Recipe("inversor", 1, costs(Material.COPPER_INGOT, 4, Material.REDSTONE, 2, Material.GOLD_INGOT, 1, Material.IRON_INGOT, 1)));
         recipes.add(new Recipe("cabo", 1, costs(Material.COPPER_INGOT, 2), 8));
-        recipes.add(new Recipe("juncao", 1, costs(Material.COPPER_BLOCK, 1), 4));
+        recipes.add(new Recipe("juncao", 1, costs(Material.COPPER_BLOCK, 1, Material.IRON_INGOT, 1, Material.REDSTONE, 2), 2));
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.COPPER_INGOT, 4, Material.IRON_INGOT, 2, Material.GOLD_INGOT, 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.COPPER_INGOT, 6, Material.REDSTONE_BLOCK, 1, Material.IRON_INGOT, 2)));
     }
@@ -124,11 +128,7 @@ final class Engineer implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
     }
 
-    void onBecome(Player p) {
-        p.discoverRecipe(recipeKey);
-        p.sendMessage(Component.text("⚒ Engenheiro: crafte a Bancada de Engenharia (mesa de trabalho + 5 ferro + redstone) e abra ela para montar torres e geradores.", NamedTextColor.GOLD));
-        p.sendMessage(Component.text(levelSummary(1), NamedTextColor.GRAY));
-    }
+    void discover(Player p) { p.discoverRecipe(recipeKey); }
 
     String levelSummary(int lvl) {
         int i = lvl - 1;
@@ -144,7 +144,7 @@ final class Engineer implements Listener {
     ItemStack item(String type) {
         Material mat; String name; List<String> lore;
         switch (type) {
-            case "bancada" -> { mat = Material.SMITHING_TABLE; name = "Bancada de Engenharia"; lore = List.of("Clique com o direito para montar dispositivos.", "So engenheiros conseguem usar."); }
+            case "bancada" -> { mat = Material.SMITHING_TABLE; name = "Bancada de Engenharia"; lore = List.of("Clique com o direito para montar dispositivos."); }
             case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas ou bolas de fogo guardadas nela", "em mobs hostis. Ligada, consome " + upkeep(1) + "/s", "mesmo parada; cada flecha gasta mais " + (int) SHOT_COST + ",", "bola de fogo " + (int) FIREBALL_COST + ". Ligue com cabos."); }
             case "carvao" -> { mat = Material.FURNACE; name = "Gerador a Carvao"; lore = List.of("Coloque carvao no espaco de combustivel.", "Funil pela lateral tambem abastece.", "4 energia/s enquanto queima."); }
             case "geotermico" -> { mat = Material.MAGMA_BLOCK; name = "Gerador Geotermico"; lore = List.of("0.5 energia/s por fonte de lava encostada.", "Dobro no Nether. Nunca para."); }
@@ -152,6 +152,7 @@ final class Engineer implements Listener {
             case "bateria" -> { mat = Material.LODESTONE; name = "Bateria"; lore = List.of("Guarda ate 5000 de energia.", "Geradores na mesma rede carregam ela."); }
             case "inversor" -> { mat = Material.WAXED_COPPER_BULB; name = "Inversor CC/CA"; lore = List.of("Converte a energia dos paineis solares", "da rede (CC) para as maquinas (CA).", "Ate " + (int) INVERTER_RATE + " energia/s, 90% de eficiencia."); }
             case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor.", "Energizado da choque em quem encostar."); }
+            case "cano" -> { mat = Material.IRON_BARS; name = "Cano da Torre"; lore = List.of("Peca de reposicao da Torre Sentinela.", "Aguenta " + BARREL_MAX + " tiros (bola de fogo conta 2).", "Troque pelo menu da torre."); }
             case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
@@ -160,7 +161,7 @@ final class Engineer implements Listener {
         m.displayName(Component.text(name, NamedTextColor.GOLD, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
         List<Component> l = new ArrayList<>();
         for (String s : lore) l.add(Component.text(s, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
-        l.add(Component.text("Engenheiro", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+        l.add(Component.text("Engenharia", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         m.lore(l);
         m.getPersistentDataContainer().set(devKey, PersistentDataType.STRING, type);
         it.setItemMeta(m);
@@ -176,17 +177,18 @@ final class Engineer implements Listener {
         return switch (type) {
             case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
             case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
-            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; default -> type;
+            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; case "cano" -> "Cano da Torre"; default -> type;
         };
     }
 
     // ---------- crafting da bancada ----------
 
+    /** Itens do plugin (cano, cabo...) nao entram em receitas vanilla. */
     @EventHandler
     public void onPrepare(PrepareItemCraftEvent e) {
-        if (!"bancada".equals(typeOf(e.getInventory().getResult()))) return;
-        if (!(e.getView().getPlayer() instanceof Player p) || !plugin.is(p, PClass.ENGENHEIRO))
-            e.getInventory().setResult(null);
+        if ("bancada".equals(typeOf(e.getInventory().getResult()))) return;
+        for (ItemStack it : e.getInventory().getMatrix())
+            if (typeOf(it) != null) { e.getInventory().setResult(null); return; }
     }
 
     // ---------- colocar / quebrar ----------
@@ -211,11 +213,7 @@ final class Engineer implements Listener {
             invalidate();
             return;
         }
-        if (!plugin.is(p, PClass.ENGENHEIRO)) {
-            e.setCancelled(true);
-            p.sendMessage(Component.text("So engenheiros sabem montar isso.", NamedTextColor.RED));
-            return;
-        }
+        if (type.equals("cano")) { e.setCancelled(true); return; }
         Block b = e.getBlockPlaced();
         int lvl = plugin.level(p.getUniqueId());
         if (type.equals("torre") && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
@@ -224,6 +222,8 @@ final class Engineer implements Listener {
             return;
         }
         Device d = new Device(type, b.getWorld().getName(), b.getX(), b.getY(), b.getZ(), p.getUniqueId());
+        Integer worn = e.getItemInHand().getItemMeta().getPersistentDataContainer().get(barrelKey, PersistentDataType.INTEGER);
+        if (worn != null) d.barrel = worn;
         if (d.isSource() && count(p.getUniqueId(), b.getWorld().getName(), false) >= MAX_POWER_DEVICES) {
             e.setCancelled(true);
             p.sendMessage(Component.text("Limite de " + MAX_POWER_DEVICES + " geradores/baterias.", NamedTextColor.RED));
@@ -248,7 +248,19 @@ final class Engineer implements Listener {
             c.getInventory().clear();
         }
         b.setType(Material.AIR);
-        if (dropItem) b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), item(d.type));
+        if (dropItem) b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), d.type.equals("torre") ? turretItem(d.barrel) : item(d.type));
+    }
+
+    private ItemStack turretItem(int barrel) {
+        ItemStack it = item("torre");
+        if (barrel >= BARREL_MAX) return it;
+        ItemMeta m = it.getItemMeta();
+        m.getPersistentDataContainer().set(barrelKey, PersistentDataType.INTEGER, barrel);
+        List<Component> l = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
+        l.add(0, Component.text("Cano: " + barrel + "/" + BARREL_MAX + " tiros", barrel > 0 ? NamedTextColor.YELLOW : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        m.lore(l);
+        it.setItemMeta(m);
+        return it;
     }
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
@@ -330,7 +342,6 @@ final class Engineer implements Listener {
         switch (d.type) {
             case "bancada" -> {
                 e.setCancelled(true);
-                if (!plugin.is(p, PClass.ENGENHEIRO)) { p.sendMessage(Component.text("So engenheiros entendem essa bancada.", NamedTextColor.RED)); return; }
                 openBench(p);
             }
             case "bateria", "geotermico", "solar", "carvao", "inversor" -> {
@@ -404,7 +415,7 @@ final class Engineer implements Listener {
 
     void openPanel(Player p) {
         ClassPanel h = new ClassPanel();
-        Inventory inv = Bukkit.createInventory(h, 54, Component.text("Engenheiro"));
+        Inventory inv = Bukkit.createInventory(h, 54, Component.text("Engenharia"));
         h.inv = inv;
         UUID id = p.getUniqueId();
         int lvl = plugin.level(id), xp = plugin.data(id).xp;
@@ -413,8 +424,9 @@ final class Engineer implements Listener {
         for (int i = 0; i < 54; i++) inv.setItem(i, filler);
 
         String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
-        inv.setItem(4, icon(Material.DISPENSER, "Engenheiro - nivel " + lvl, NamedTextColor.GOLD,
-                next, "", "Ganha XP montando na bancada (+3)", "e com abates das suas torres (+1).", "", "A classe zera quando voce morre."));
+        inv.setItem(4, icon(Material.DISPENSER, "Engenharia - nivel " + lvl, NamedTextColor.GOLD,
+                next, "", "Todo mundo pode montar, o nivel", "e que libera mais coisas.", "",
+                "XP: montar na bancada (+" + XP_CRAFT + "), trocar", "cano de torre (+" + XP_REPAIR + "), abate de torre (+" + XP_KILL + ").", "", "O nivel zera quando a vida acaba."));
 
         inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
                 "Receita na mesa de trabalho:", "  _ R _", "  I M I", "  I I I",
@@ -456,8 +468,6 @@ final class Engineer implements Listener {
         boolean fxOn = plugin.fxEnabled(p);
         inv.setItem(8, icon(fxOn ? Material.GLOWSTONE_DUST : Material.GUNPOWDER, "Particulas de energia: " + (fxOn ? "ligadas" : "desligadas"),
                 fxOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Mostra a energia correndo pelos", "cabos ate as maquinas.", "", "Clique para " + (fxOn ? "desligar" : "ligar") + "."));
-        inv.setItem(52, icon(Material.ENDER_EYE, "Trocar de classe", NamedTextColor.LIGHT_PURPLE,
-                "Custa " + BabylonClasses.CHANGE_COST_LEVELS + " niveis de XP.", "Zera o nivel da classe."));
         p.openInventory(inv);
     }
 
@@ -474,8 +484,7 @@ final class Engineer implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int raw = e.getRawSlot();
-        if (raw == 52) plugin.openMenu(p);
-        else if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
+        if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
         else if (raw == 10) openRecipe(p, "bancada");
         else if (raw >= 11 && raw < 11 + recipes.size()) openRecipe(p, recipes.get(raw - 11).type());
     }
@@ -527,7 +536,7 @@ final class Engineer implements Listener {
                     Material.IRON_INGOT, Material.IRON_INGOT, Material.IRON_INGOT};
             for (int i = 0; i < 9; i++) if (shape[i] != null) inv.setItem(GRID[i], ingredient(p, shape[i], 1));
             inv.setItem(23, icon(Material.CRAFTING_TABLE, "Mesa de trabalho", NamedTextColor.YELLOW,
-                    "Monte nesta forma numa", "mesa de trabalho comum.", "So engenheiros conseguem."));
+                    "Monte nesta forma numa", "mesa de trabalho comum."));
         } else {
             Recipe r = recipe(type);
             int i = 0;
@@ -535,7 +544,7 @@ final class Engineer implements Listener {
             boolean lvlOk = plugin.level(p.getUniqueId()) >= r.minLevel();
             boolean near = nearBench(p);
             List<String> lore = new ArrayList<>();
-            if (!lvlOk) lore.add("Requer Engenheiro nivel " + r.minLevel());
+            if (!lvlOk) lore.add("Requer Engenharia nivel " + r.minLevel());
             else if (!near) { lore.add("Chegue perto de uma"); lore.add("Bancada de Engenharia (6 blocos)."); }
             else lore.add("Clique para montar");
             inv.setItem(23, icon(lvlOk && near ? Material.LIME_CONCRETE : Material.RED_CONCRETE,
@@ -600,7 +609,7 @@ final class Engineer implements Listener {
     }
 
     private boolean craft(Player p, Recipe r) {
-        if (plugin.level(p.getUniqueId()) < r.minLevel()) { p.sendMessage(Component.text("Requer Engenheiro nivel " + r.minLevel() + ".", NamedTextColor.RED)); return false; }
+        if (plugin.level(p.getUniqueId()) < r.minLevel()) { p.sendMessage(Component.text("Requer Engenharia nivel " + r.minLevel() + ".", NamedTextColor.RED)); return false; }
         for (Map.Entry<Material, Integer> c : r.cost().entrySet())
             if (countMat(p, c.getKey()) < c.getValue()) {
                 p.sendMessage(Component.text("Falta " + pretty(c.getKey()) + ".", NamedTextColor.RED));
@@ -611,7 +620,7 @@ final class Engineer implements Listener {
         ItemStack out = item(r.type()); out.setAmount(r.amount());
         for (ItemStack left : p.getInventory().addItem(out).values()) p.getWorld().dropItemNaturally(p.getLocation(), left);
         p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1f);
-        plugin.addXp(p.getUniqueId(), 3);
+        plugin.addXp(p.getUniqueId(), XP_CRAFT);
         return true;
     }
 
@@ -1021,7 +1030,7 @@ final class Engineer implements Listener {
         for (Device t : devices.values()) {
             if (!t.type.equals("torre")) continue;
             World w = Bukkit.getWorld(t.world);
-            if (!t.enabled || !loaded(t, w)) { t.powered = false; continue; }
+            if (!t.enabled || t.barrel <= 0 || !loaded(t, w)) { t.powered = false; continue; }
             t.powered = drain(t, upkeep(plugin.level(t.owner)), powerTicks % 3 == 0);
         }
         // geradores despejam o excedente nas baterias da mesma rede
@@ -1188,7 +1197,7 @@ final class Engineer implements Listener {
         tick += 5;
         for (Iterator<Device> it = devices.values().iterator(); it.hasNext(); ) {
             Device t = it.next();
-            if (!t.type.equals("torre") || !t.enabled || !t.powered || t.nextShot > tick) continue;
+            if (!t.type.equals("torre") || !t.enabled || !t.powered || t.barrel <= 0 || t.nextShot > tick) continue;
             World w = Bukkit.getWorld(t.world);
             if (!loaded(t, w)) continue;
             Block b = w.getBlockAt(t.x, t.y, t.z);
@@ -1247,6 +1256,13 @@ final class Engineer implements Listener {
             cont.getInventory().setItem(slot, ammo.getAmount() > 0 ? ammo : null);
 
             int shots = lvl >= 5 ? 2 : 1;
+            t.barrel = Math.max(0, t.barrel - shots * (fireball ? 2 : 1));
+            if (t.barrel == 0) {
+                w.playSound(c, Sound.ENTITY_ITEM_BREAK, 1f, 0.7f);
+                w.spawnParticle(Particle.LARGE_SMOKE, c.clone().add(0, 0.6, 0), 10, 0.2, 0.2, 0.2, 0.02);
+                Player o = Bukkit.getPlayer(t.owner);
+                if (o != null) o.sendMessage(Component.text("⚠ O cano de uma Torre Sentinela gastou (" + t.x + " " + t.y + " " + t.z + "). Troque pelo menu dela.", NamedTextColor.RED));
+            }
             if (fireball) {
                 for (int s = 0; s < shots; s++) fireball(w, c, bestAim, t, s == 0 ? 0 : 0.08);
                 w.playSound(c, Sound.ITEM_FIRECHARGE_USE, 0.7f, 1.2f);
@@ -1351,13 +1367,15 @@ final class Engineer implements Listener {
                 double net = networkEnergy(d, w);
                 Component state;
                 if (!d.enabled) state = Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD);
+                else if (d.barrel <= 0) state = Component.text("CANO GASTO", NamedTextColor.RED, TextDecoration.BOLD);
                 else if (sourcesFor(d).isEmpty()) state = Component.text("SEM REDE", NamedTextColor.RED, TextDecoration.BOLD);
                 else if (am[0] + am[1] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
                 else if (!d.powered || net < SHOT_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
                 else state = Component.text("⚡ " + (int) net + " na rede  ", NamedTextColor.YELLOW)
                         .append(Component.text(String.format(Locale.ROOT, "-%.2f/s", upkeep(lvl)), NamedTextColor.RED));
                 return name.append(nl).append(Component.text("Nivel " + lvl + "  •  alcance " + RANGE[lvl - 1], g))
-                        .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo", NamedTextColor.WHITE))
+                        .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo  ", NamedTextColor.WHITE))
+                        .append(Component.text("cano " + (100 * d.barrel / BARREL_MAX) + "%", d.barrel > BARREL_MAX / 5 ? NamedTextColor.GRAY : NamedTextColor.RED))
                         .append(nl).append(state);
             }
             default -> {
@@ -1494,7 +1512,7 @@ final class Engineer implements Listener {
         double net = networkEnergy(d, w);
 
         inv.setItem(4, icon(Material.DISPENSER, "Torre Sentinela", NamedTextColor.GOLD,
-                "Dono: " + (owner.getName() == null ? "?" : owner.getName()) + " (Engenheiro nivel " + lvl + ")",
+                "Dono: " + (owner.getName() == null ? "?" : owner.getName()) + " (Engenharia nivel " + lvl + ")",
                 "Alcance " + RANGE[lvl - 1] + " blocos, " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[lvl - 1]) + " tiros/s",
                 "Energia na rede: " + (int) net,
                 String.format(Locale.ROOT, "Consumo ligada: %.2f/s + %d por tiro", upkeep(lvl), (int) SHOT_COST),
@@ -1513,6 +1531,11 @@ final class Engineer implements Listener {
             inv.setItem(28 + i + (i >= 3 ? 1 : 0), icon(on ? CAT_ICON[i] : Material.BARRIER, CATS[i] + ": " + (on ? "atirando" : "ignorando"),
                     on ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (on ? "ignorar" : "atirar") + "."));
         }
+        int pct = 100 * d.barrel / BARREL_MAX;
+        inv.setItem(20, icon(d.barrel > 0 ? Material.IRON_BARS : Material.BARRIER, "Cano: " + d.barrel + "/" + BARREL_MAX + " tiros (" + pct + "%)",
+                d.barrel > BARREL_MAX / 5 ? NamedTextColor.GREEN : NamedTextColor.RED,
+                bar(d.barrel, BARREL_MAX), "Cada tiro gasta 1, bola de fogo 2.", "Gasto: a torre para de atirar.", "",
+                "Clique com um Cano da Torre no", "inventario para trocar (+" + XP_REPAIR + " XP)."));
         inv.setItem(22, icon(Material.OAK_SIGN, "Filtro de mobs", NamedTextColor.WHITE, "Escolha abaixo em quem", "a torre atira."));
         inv.setItem(38, icon(d.enabled ? Material.LIME_DYE : Material.GRAY_DYE, d.enabled ? "Ligada" : "Desligada",
                 d.enabled ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (d.enabled ? "desligar" : "ligar") + "."));
@@ -1538,6 +1561,18 @@ final class Engineer implements Listener {
             case 12 -> d.ammoPref = (d.ammoPref + 1) % AMMOS.length;
             case 14 -> d.prio = (d.prio + 1) % PRIOS.length;
             case 16 -> d.tagOn = !d.tagOn;
+            case 20 -> {
+                if (!takeOne(p, "cano")) {
+                    p.sendMessage(Component.text("Voce precisa de um Cano da Torre (Bancada de Engenharia).", NamedTextColor.RED));
+                    p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
+                    return;
+                }
+                d.barrel = BARREL_MAX;
+                p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_USE, 0.7f, 1.3f);
+                p.sendMessage(Component.text("⚙ Cano trocado.", NamedTextColor.GOLD));
+                plugin.addXp(p.getUniqueId(), XP_REPAIR);
+                invalidate();
+            }
             case 40 -> { p.closeInventory(); showRange(p, d, RANGE[plugin.level(d.owner) - 1], Color.fromRGB(230, 60, 40)); return; }
             case 38 -> d.enabled = !d.enabled;
             case 42 -> { p.closeInventory(); showNet(p, d); return; }
@@ -1550,6 +1585,18 @@ final class Engineer implements Listener {
         }
         p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);
         openTurret(p, d);
+    }
+
+    private boolean takeOne(Player p, String type) {
+        ItemStack[] st = p.getInventory().getStorageContents();
+        for (int i = 0; i < st.length; i++) {
+            if (st[i] == null || !type.equals(typeOf(st[i]))) continue;
+            st[i].setAmount(st[i].getAmount() - 1);
+            if (st[i].getAmount() <= 0) st[i] = null;
+            p.getInventory().setStorageContents(st);
+            return true;
+        }
+        return false;
     }
 
     @EventHandler
@@ -1577,7 +1624,7 @@ final class Engineer implements Listener {
         if (!(ed.getDamager() instanceof Projectile a)) return;
         String owner = a.getPersistentDataContainer().get(arrowKey, PersistentDataType.STRING);
         if (owner == null) return;
-        try { plugin.addXp(UUID.fromString(owner), 1); } catch (IllegalArgumentException ignored) { }
+        try { plugin.addXp(UUID.fromString(owner), XP_KILL); } catch (IllegalArgumentException ignored) { }
     }
 
     // ---------- status / persistencia ----------
@@ -1613,6 +1660,7 @@ final class Engineer implements Listener {
                 d.filter = c.getInt("filter", 0b111111);
                 d.prio = c.getInt("prio");
                 d.ammoPref = c.getInt("ammo");
+                d.barrel = c.getInt("barrel", BARREL_MAX);
                 devices.put(d.key(), d);
             } catch (Exception ex) { plugin.getLogger().warning("device " + k + ": " + ex.getMessage()); }
         }
@@ -1632,6 +1680,7 @@ final class Engineer implements Listener {
             if (d.type.equals("torre")) {
                 y.set(k + ".filter", d.filter);
                 y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);
+                y.set(k + ".barrel", d.barrel);
             }
         }
         y.set("cables", new ArrayList<>(cables));
