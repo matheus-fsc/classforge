@@ -39,7 +39,7 @@ import java.util.*;
 /** Engenheiro: bancada, torres sentinela, geradores (carvao, geotermico, solar) e bateria. */
 final class Engineer implements Listener {
 
-    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo"};
+    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao"};
 
     // por nivel 1..5
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
@@ -95,6 +95,7 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("solar", 1, costs(Material.DAYLIGHT_DETECTOR, 1, Material.COPPER_INGOT, 4, Material.GLASS, 2, Material.REDSTONE, 2)));
         recipes.add(new Recipe("inversor", 1, costs(Material.COPPER_INGOT, 4, Material.REDSTONE, 2, Material.GOLD_INGOT, 1, Material.IRON_INGOT, 1)));
         recipes.add(new Recipe("cabo", 1, costs(Material.COPPER_INGOT, 2), 8));
+        recipes.add(new Recipe("juncao", 1, costs(Material.COPPER_BLOCK, 1), 4));
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.COPPER_INGOT, 4, Material.IRON_INGOT, 2, Material.GOLD_INGOT, 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.COPPER_INGOT, 6, Material.REDSTONE_BLOCK, 1, Material.IRON_INGOT, 2)));
     }
@@ -118,6 +119,7 @@ final class Engineer implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickTurrets, 5L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickPower, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::tickShock, 10L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
     }
 
@@ -148,7 +150,8 @@ final class Engineer implements Listener {
             case "solar" -> { mat = Material.DAYLIGHT_DETECTOR; name = "Painel Solar"; lore = List.of("1.5 energia/s de dia com ceu aberto.", "Gera corrente continua (CC): precisa", "de um Inversor na rede para abastecer."); }
             case "bateria" -> { mat = Material.LODESTONE; name = "Bateria"; lore = List.of("Guarda ate 5000 de energia.", "Geradores na mesma rede carregam ela."); }
             case "inversor" -> { mat = Material.WAXED_COPPER_BULB; name = "Inversor CC/CA"; lore = List.of("Converte a energia dos paineis solares", "da rede (CC) para as maquinas (CA).", "Ate " + (int) INVERTER_RATE + " energia/s, 90% de eficiencia."); }
-            case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor."); }
+            case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor.", "Energizado da choque em quem encostar."); }
+            case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
         ItemStack it = new ItemStack(mat);
@@ -172,7 +175,7 @@ final class Engineer implements Listener {
         return switch (type) {
             case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
             case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
-            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; default -> type;
+            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; default -> type;
         };
     }
 
@@ -201,7 +204,7 @@ final class Engineer implements Listener {
         String type = typeOf(e.getItemInHand());
         if (type == null) return;
         Player p = e.getPlayer();
-        if (type.equals("cabo")) { // qualquer um da party pode puxar fio
+        if (type.equals("cabo") || type.equals("juncao")) { // qualquer um da party pode puxar fio
             Block cb = e.getBlockPlaced();
             cables.add(key(cb.getWorld().getName(), cb.getX(), cb.getY(), cb.getZ()));
             invalidate();
@@ -433,7 +436,7 @@ final class Engineer implements Listener {
                 "Energia guardada: " + (int) storedEnergy(id, w)));
         inv.setItem(48, icon(Material.LIGHTNING_ROD, "Como funciona a energia", NamedTextColor.YELLOW,
                 "Ligue as maquinas com Cabos de Energia.", "Tudo encostado no mesmo cabo e uma rede.",
-                "Alavanca no meio do cabo = disjuntor.", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
+                "Alavanca no meio do cabo = disjuntor.", "Juncao (bloco de cobre) faz curvas.", "Cabo energizado da choque!", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
                 "Geradores enchem as baterias da rede.", "Solar e CC: precisa de Inversor na rede.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
@@ -662,17 +665,73 @@ final class Engineer implements Listener {
     private final Map<String, Net> netCache = new HashMap<>();
     private final Map<String, List<int[]>> pathCache = new HashMap<>();
     private long lastInvalidate;
+    private final Set<String> live = new HashSet<>();
+    private final Map<UUID, Long> lastShock = new HashMap<>();
+
+    /** Marca os cabos de redes que tem energia CA disponivel. */
+    private void refreshLive() {
+        live.clear();
+        Set<Net> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Device d : devices.values()) {
+            World w = Bukkit.getWorld(d.world);
+            if (!loaded(d, w)) continue;
+            Net n = net(d);
+            if (!seen.add(n)) continue;
+            double e = 0;
+            for (Device m : n.devs)
+                if (acGenerator(m) || (m.type.equals("bateria") && m.enabled && m.mode != 1)) e += m.energy;
+            if (e < 1) continue;
+            for (int[] c : n.nodes) {
+                String k = key(d.world, c[0], c[1], c[2]);
+                if (cables.contains(k)) live.add(k);
+            }
+        }
+    }
+
+    /** Encostar num cabo energizado: dano e lentidao II. */
+    private void tickShock() {
+        if (live.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            GameMode gm = p.getGameMode();
+            if (gm != GameMode.SURVIVAL && gm != GameMode.ADVENTURE || p.isDead()) continue;
+            org.bukkit.util.BoundingBox bb = p.getBoundingBox().expand(0.08);
+            String wn = p.getWorld().getName();
+            Block hit = null;
+            outer:
+            for (int x = (int) Math.floor(bb.getMinX()); x <= (int) Math.floor(bb.getMaxX()); x++)
+                for (int y = (int) Math.floor(bb.getMinY()); y <= (int) Math.floor(bb.getMaxY()); y++)
+                    for (int z = (int) Math.floor(bb.getMinZ()); z <= (int) Math.floor(bb.getMaxZ()); z++)
+                        if (live.contains(key(wn, x, y, z))) {
+                            Block b = p.getWorld().getBlockAt(x, y, z);
+                            // a corrente e fina: so conta se a caixa do jogador tocar a forma real dela
+                            if (b.getBoundingBox().overlaps(bb)) { hit = b; break outer; }
+                        }
+            if (hit == null) continue;
+            if (now - lastShock.getOrDefault(p.getUniqueId(), 0L) < 1000) continue;
+            lastShock.put(p.getUniqueId(), now);
+            p.damage(2.0);
+            p.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1, false, true, true));
+            p.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, p.getLocation().add(0, 1, 0), 12, 0.3, 0.5, 0.3, 0.05);
+            p.playSound(p.getLocation(), Sound.BLOCK_COPPER_BULB_TURN_ON, 0.6f, 2f);
+            p.sendActionBar(Component.text("⚡ Choque! Cabo energizado.", NamedTextColor.YELLOW, TextDecoration.BOLD));
+        }
+    }
 
     static String key(String w, int x, int y, int z) { return w + ":" + x + ":" + y + ":" + z; }
 
     private boolean isCable(Block b) { return cables.contains(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ())); }
 
-    private static boolean cableBlock(Material m) { return m.name().endsWith("COPPER_CHAIN"); }
+    private static boolean cableBlock(Material m) {
+        String n = m.name();
+        return n.endsWith("COPPER_CHAIN") || n.matches("(WAXED_)?(EXPOSED_|WEATHERED_|OXIDIZED_)?COPPER(_BLOCK)?");
+    }
 
     private void breakCable(Block b, boolean drop) {
         cables.remove(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()));
+        String kind = b.getType().name().endsWith("COPPER_CHAIN") ? "cabo" : "juncao";
         b.setType(Material.AIR);
-        if (drop) b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), item("cabo"));
+        if (drop) b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), item(kind));
         invalidate();
     }
 
@@ -849,6 +908,7 @@ final class Engineer implements Listener {
                 if (g.energy <= 0) break;
             }
         }
+        refreshLive();
         updateTags();
     }
 
