@@ -52,6 +52,9 @@ final class Engineer implements Listener {
     static final Set<String> MACHINES = Set.of("forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora");
 
     // por nivel 1..5
+    /** Alcance de visao das etiquetas (multiplicador de 64 blocos): ~6 blocos. */
+    static final float TAG_RANGE = 0.1f;
+
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
     static final int[] RANGE = {12, 14, 16, 18, 20};
     static final int[] COOLDOWN = {20, 17, 14, 12, 10}; // ticks entre tiros
@@ -2103,13 +2106,14 @@ final class Engineer implements Listener {
                     td.setPersistent(false);
                     td.setBillboard(Display.Billboard.CENTER);
                     td.setShadowed(true);
-                    td.setViewRange(0.35f);
+                    td.setViewRange(TAG_RANGE); // so aparece de perto (~6 blocos)
                     td.setBackgroundColor(Color.fromARGB(90, 0, 0, 0));
                     td.setAlignment(TextDisplay.TextAlignment.CENTER);
                     td.text(tx);
                 });
             } else {
                 d.tag.text(text);
+                if (d.tag.getViewRange() != TAG_RANGE) d.tag.setViewRange(TAG_RANGE);
                 if (d.tag.getLocation().distanceSquared(at) > 0.01) d.tag.teleport(at);
             }
         }
