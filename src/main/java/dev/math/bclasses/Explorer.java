@@ -187,8 +187,10 @@ final class Explorer implements Listener {
 
     private static boolean isCandle(Block b) {
         String n = b.getType().name();
-        return (n.equals("CANDLE") || n.endsWith("_CANDLE")) && b.getBlockData() instanceof Lightable l && l.isLit();
+        return n.equals("CANDLE") || n.endsWith("_CANDLE");
     }
+
+    private static boolean lit(Block b) { return b.getBlockData() instanceof Lightable l && l.isLit(); }
 
     private static int count(Player p, Set<Material> mats) {
         int n = 0;
@@ -216,10 +218,26 @@ final class Explorer implements Listener {
         Kind kind = null;
         for (Kind k : Kind.values()) if (k.altar == b.getType()) kind = k;
         if (kind == null) return;
-        Block[] candles = {b.getRelative(1, 0, 1), b.getRelative(1, 0, -1), b.getRelative(-1, 0, 1), b.getRelative(-1, 0, -1)};
-        for (Block c : candles) if (!isCandle(c)) return;
-        e.setCancelled(true);
+        Block[] diag = {b.getRelative(1, 0, 1), b.getRelative(1, 0, -1), b.getRelative(-1, 0, 1), b.getRelative(-1, 0, -1)};
+        Block[] side = {b.getRelative(1, 0, 0), b.getRelative(-1, 0, 0), b.getRelative(0, 0, 1), b.getRelative(0, 0, -1)};
+        int nd = 0, ns = 0;
+        for (Block c : diag) if (isCandle(c)) nd++;
+        for (Block c : side) if (isCandle(c)) ns++;
+        if (nd == 0 && ns == 0) return; // bloco comum, sem altar
         Player p = e.getPlayer();
+        e.setCancelled(true);
+        Block[] candles = nd >= ns ? diag : side;
+        int n = Math.max(nd, ns);
+        if (n < 4) {
+            p.sendMessage(Component.text("Altar de " + kind.label + ": faltam " + (4 - n) + " velas (4 em volta, nos lados ou nas diagonais).", NamedTextColor.YELLOW));
+            return;
+        }
+        int unlit = 0;
+        for (Block c : candles) if (!lit(c)) unlit++;
+        if (unlit > 0) {
+            p.sendMessage(Component.text("Altar de " + kind.label + ": acenda as velas (" + unlit + " apagadas). Use isqueiro ou carga de fogo.", NamedTextColor.YELLOW));
+            return;
+        }
         if (!BabylonClasses.isRunWorld(p.getWorld())) { p.sendMessage(Component.text("O ritual so funciona no mundo da run.", NamedTextColor.RED)); return; }
         PetData d = pd(p.getUniqueId());
         Entity cur = d.pet == null ? null : Bukkit.getEntity(d.pet);
@@ -437,6 +455,39 @@ final class Explorer implements Listener {
     @EventHandler
     public void onPackClose(InventoryCloseEvent e) { if (e.getInventory().getHolder() instanceof PackHolder) save(); }
 
+    // ---------- invocacao de admin (/classe give explorador) ----------
+
+    ItemStack petItem(Kind k) {
+        Material egg = switch (k) { case LOBO -> Material.WOLF_SPAWN_EGG; case RAPOSA -> Material.FOX_SPAWN_EGG; case GATO -> Material.CAT_SPAWN_EGG; };
+        ItemStack it = new ItemStack(egg);
+        ItemMeta m = it.getItemMeta();
+        m.displayName(Component.text("Invocar " + k.label, k.color, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+        m.lore(List.of(Component.text("Admin: vira seu companheiro sem ritual.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("Troca o pet atual.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+        m.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, "pet:" + k.name());
+        it.setItemMeta(m);
+        return it;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPetItem(PlayerInteractEvent e) {
+        ItemStack it = e.getItem();
+        if (it == null || !it.hasItemMeta()) return;
+        String v = it.getItemMeta().getPersistentDataContainer().get(itemKey, PersistentDataType.STRING);
+        if (v == null || !v.startsWith("pet:")) return;
+        e.setCancelled(true);
+        if (e.getHand() != EquipmentSlot.HAND || e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || e.getClickedBlock() == null) return;
+        Player p = e.getPlayer();
+        Kind k = Kind.valueOf(v.substring(4));
+        PetData d = pd(p.getUniqueId());
+        if (d.alive && d.pet != null) { Entity cur = Bukkit.getEntity(d.pet); if (cur != null) cur.remove(); }
+        Location at = e.getClickedBlock().getRelative(e.getBlockFace()).getLocation().add(0.5, 0, 0.5);
+        if (d.kind != k) dropPack(d, at);
+        summon(p, d, k, at);
+        if (p.getGameMode() != GameMode.CREATIVE) it.setAmount(it.getAmount() - 1);
+        p.sendMessage(Component.text("✦ " + k.label + " invocado.", k.color));
+    }
+
     // ---------- Ancora de Perola ----------
 
     ItemStack anchorItem() {
@@ -617,7 +668,7 @@ final class Explorer implements Listener {
             }
             lore.add("");
             lore.add("Ritual: " + pretty(k.altar) + " no centro,");
-            lore.add("4 velas acesas nas diagonais.");
+            lore.add("4 velas acesas em volta.");
             lore.add("Clique no centro com:");
             for (Cost c : costs(k, revive)) lore.add((count(p, c.mats()) >= c.amount() ? "+ " : "! ") + c.amount() + "x " + c.label());
             lore.add((p.getLevel() >= xpCost(d) ? "+ " : "! ") + xpCost(d) + " niveis de XP");

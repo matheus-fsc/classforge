@@ -204,6 +204,28 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             s.sendMessage(t.getName() + " agora tem " + (exp ? "Exploracao" : "Engenharia") + " nivel " + lvl);
             return true;
         }
+        if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("bclasses.admin")) {
+            Player t = a.length >= 3 ? Bukkit.getPlayerExact(a[2]) : s instanceof Player sp ? sp : null;
+            if (t == null) { s.sendMessage("Jogador offline."); return true; }
+            List<ItemStack> items = new ArrayList<>();
+            String which = a[1].toLowerCase(Locale.ROOT);
+            if (which.startsWith("eng")) {
+                for (String type : Engineer.TYPES) {
+                    ItemStack it = engineer.item(type);
+                    if (it == null) continue;
+                    if (type.equals("cabo") || type.equals("juncao")) it.setAmount(64);
+                    else if (type.equals("cano") || type.equals("solar")) it.setAmount(4);
+                    items.add(it);
+                }
+            } else if (which.startsWith("exp")) {
+                for (Explorer.Kind k : Explorer.Kind.values()) items.add(explorer.petItem(k));
+                ItemStack an = explorer.anchorItem(); an.setAmount(2); items.add(an);
+                items.add(new ItemStack(Material.ENDER_PEARL, 16));
+            } else { s.sendMessage("Use: /classe give <engenheiro|explorador> [jogador]"); return true; }
+            for (ItemStack left : t.getInventory().addItem(items.toArray(new ItemStack[0])).values()) t.getWorld().dropItemNaturally(t.getLocation(), left);
+            s.sendMessage("Itens de " + (which.startsWith("eng") ? "Engenharia" : "Exploracao") + " entregues para " + t.getName() + ".");
+            return true;
+        }
         if (!(s instanceof Player p)) { s.sendMessage("Somente jogadores."); return true; }
         if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("bclasses.admin")) {
             ItemStack it = a[1].equalsIgnoreCase("ancora") ? explorer.anchorItem() : engineer.item(a[1].toLowerCase(Locale.ROOT));
@@ -286,10 +308,11 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
             List<String> o = new ArrayList<>(List.of("info", "particulas"));
-            if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); }
+            if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); }
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); return o; }
+        if (a.length == 2 && a[0].equalsIgnoreCase("give")) return List.of("engenheiro", "explorador");
         if (a.length == 4 && a[0].equalsIgnoreCase("admin")) return List.of("engenharia", "exploracao");
         return null;
     }
