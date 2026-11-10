@@ -747,6 +747,12 @@ final class Explorer implements Listener {
         inv.setItem(4, icon(Material.COMPASS, "Exploracao - nivel " + lvl, NamedTextColor.AQUA, List.of(
                 next, "Chunks visitados nesta vida: " + d.chunks.size(), "", "+1 XP por chunk novo (mundo da run).",
                 "Carne da +" + String.format(Locale.ROOT, "%.1f", 0.6 * lvl) + " de saturacao extra.", "", "O nivel zera quando a vida acaba.")));
+        inv.setItem(6, icon(Material.EXPERIENCE_BOTTLE, "Como ganhar XP", NamedTextColor.GREEN, List.of(
+                "+1 XP por chunk novo que voce pisa", "  no mundo da run (cada chunk conta", "  uma vez por vida).",
+                "+ Nether e End contam separado", "  do mundo normal.", "",
+                "Andar em linha reta por terreno", "novo rende ~1 XP a cada 16 blocos.",
+                "Voltar por onde ja passou nao rende.", "",
+                "Chunks nesta vida: " + d.chunks.size())));
 
         boolean revive = needsTotem(d);
         int slot = 10;
