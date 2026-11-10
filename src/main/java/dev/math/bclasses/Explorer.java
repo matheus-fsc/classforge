@@ -19,7 +19,9 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
@@ -80,7 +82,7 @@ final class Explorer implements Listener {
     static final class Channel { Location start; Anchor to; int ticks; BukkitTask task; }
 
     static final class PackHolder implements InventoryHolder {
-        final UUID owner; Inventory inv;
+        final UUID owner; Inventory inv; int size;
         PackHolder(UUID owner) { this.owner = owner; }
         @Override public Inventory getInventory() { return inv; }
     }
@@ -97,6 +99,7 @@ final class Explorer implements Listener {
     private final Map<UUID, Channel> channels = new HashMap<>();
     private final Map<UUID, Long> tpCooldown = new HashMap<>();
     private final Map<UUID, Location> lastSpot = new HashMap<>();
+    private final Map<UUID, Object[]> switchConfirm = new HashMap<>(); // {altar key, expira em ms}
     private final File file;
 
     Explorer(BabylonClasses plugin) {
@@ -128,7 +131,7 @@ final class Explorer implements Listener {
 
     int level(UUID id) { return plugin.explorerLevel(id); }
 
-    static int packSize(int lvl) { return lvl >= 5 ? 27 : lvl >= 3 ? 18 : 9; }
+    static int packSize(int lvl) { return switch (lvl) { case 1 -> 3; case 2 -> 4; case 3 -> 5; case 4 -> 7; default -> 9; }; }
 
     String levelSummary(int lvl) {
         String s = "Nivel " + lvl + ": pet com mais vida";
@@ -248,6 +251,20 @@ final class Explorer implements Listener {
         List<String> missing = new ArrayList<>();
         for (Cost c : cost) { int has = count(p, c.mats()); if (has < c.amount()) missing.add((c.amount() - has) + "x " + c.label()); }
         if (p.getLevel() < xp) missing.add((xp - p.getLevel()) + " niveis de XP");
+        // trocar de especie com pet vivo: pede confirmacao (clicar de novo no altar em 10 s)
+        if (missing.isEmpty() && d.alive && d.kind != kind) {
+            String ak = b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ() + ":" + kind;
+            Object[] pend = switchConfirm.get(p.getUniqueId());
+            if (pend == null || !ak.equals(pend[0]) || System.currentTimeMillis() > (long) pend[1]) {
+                switchConfirm.put(p.getUniqueId(), new Object[]{ak, System.currentTimeMillis() + 10_000});
+                p.sendMessage(Component.text("⚠ Voce ja tem um " + d.kind.label.toLowerCase(Locale.ROOT) + " invocado. Deseja prosseguir?", NamedTextColor.GOLD, TextDecoration.BOLD));
+                p.sendMessage(Component.text("Seu " + d.kind.label.toLowerCase(Locale.ROOT) + " antigo sera morto"
+                        + (d.kind == Kind.RAPOSA ? " e a mochila dele cai no altar" : "") + ". Clique no altar de novo em 10 s para confirmar.", NamedTextColor.YELLOW));
+                p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8f, 0.6f);
+                return;
+            }
+            switchConfirm.remove(p.getUniqueId());
+        }
         if (!missing.isEmpty()) {
             p.sendMessage(Component.text("O ritual de " + kind.label + " pede ainda: " + String.join(", ", missing) + ".", NamedTextColor.RED));
             p.playSound(p.getLocation(), Sound.BLOCK_CANDLE_EXTINGUISH, 0.8f, 0.8f);
@@ -259,7 +276,12 @@ final class Explorer implements Listener {
 
         // troca de especie: o antigo vai embora e a mochila cai no altar
         if (d.alive && d.kind != kind) {
-            if (cur != null) cur.remove();
+            if (cur instanceof LivingEntity le) {
+                le.getWorld().spawnParticle(Particle.SOUL, le.getLocation().add(0, 0.5, 0), 25, 0.3, 0.4, 0.3, 0.02);
+                le.getWorld().playSound(le.getLocation(), Sound.ENTITY_ALLAY_DEATH, 0.8f, 0.7f);
+                le.remove();
+            } else if (cur != null) cur.remove();
+            d.alive = false;
             dropPack(d, b.getLocation().add(0.5, 1.2, 0.5));
         }
         if (d.kind != kind) dropPack(d, b.getLocation().add(0.5, 1.2, 0.5));
@@ -278,7 +300,7 @@ final class Explorer implements Listener {
     }
 
     private void dropPack(PetData d, Location at) {
-        ItemStack[] items = d.pack != null ? d.pack.getContents() : d.packSaved;
+        ItemStack[] items = packItems(d);
         if (items != null) for (ItemStack it : items) if (it != null && it.getType() != Material.AIR) at.getWorld().dropItemNaturally(at, it);
         if (d.pack != null) d.pack.clear();
         d.packSaved = null;
@@ -333,7 +355,7 @@ final class Explorer implements Listener {
         e.setDroppedExp(0);
         PetData d = data.get(owner);
         if (d == null || !e.getEntity().getUniqueId().equals(d.pet)) return;
-        if (d.pack != null) d.packSaved = d.pack.getContents();
+        if (d.pack != null) d.packSaved = packItems(d);
         d.alive = false; d.deaths++;
         Player p = Bukkit.getPlayer(owner);
         if (p != null) {
@@ -417,13 +439,40 @@ final class Explorer implements Listener {
 
     // ---------- mochila da raposa ----------
 
+    private boolean isLock(ItemStack it) {
+        return it != null && it.hasItemMeta() && "lock".equals(it.getItemMeta().getPersistentDataContainer().get(itemKey, PersistentDataType.STRING));
+    }
+
+    private ItemStack lockItem(int unlockLevel) {
+        ItemStack it = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta m = it.getItemMeta();
+        m.displayName(Component.text("Bloqueado", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+        m.lore(List.of(Component.text("Libera com Exploracao nivel " + unlockLevel, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+        m.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, "lock");
+        it.setItemMeta(m);
+        return it;
+    }
+
+    /** Itens reais da mochila (sem os espacos bloqueados). */
+    private ItemStack[] packItems(PetData d) {
+        if (d.pack == null) return d.packSaved;
+        List<ItemStack> l = new ArrayList<>();
+        for (ItemStack it : d.pack.getContents()) if (it != null && !isLock(it)) l.add(it);
+        return l.toArray(new ItemStack[0]);
+    }
+
     private Inventory pack(UUID owner, PetData d) {
         int size = packSize(level(owner));
-        if (d.pack == null || d.pack.getSize() != size) {
-            ItemStack[] old = d.pack != null ? d.pack.getContents() : d.packSaved;
+        if (d.pack == null || !(d.pack.getHolder() instanceof PackHolder ph) || ph.size != size) {
+            ItemStack[] old = packItems(d);
             PackHolder h = new PackHolder(owner);
-            Inventory inv = Bukkit.createInventory(h, size, Component.text("Mochila da Raposa"));
+            h.size = size;
+            Inventory inv = Bukkit.createInventory(h, InventoryType.DISPENSER, Component.text("Mochila da Raposa (" + size + "/9)"));
             h.inv = inv;
+            for (int i = size; i < 9; i++) {
+                int need = 1; while (need < 5 && packSize(need) <= i) need++;
+                inv.setItem(i, lockItem(need));
+            }
             if (old != null) for (ItemStack it : old) if (it != null) for (ItemStack l : inv.addItem(it).values()) {
                 Player p = Bukkit.getPlayer(owner);
                 if (p != null) p.getWorld().dropItemNaturally(p.getLocation(), l);
@@ -454,6 +503,48 @@ final class Explorer implements Listener {
 
     @EventHandler
     public void onPackClose(InventoryCloseEvent e) { if (e.getInventory().getHolder() instanceof PackHolder) save(); }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPackClick(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof PackHolder h)) return;
+        boolean top = e.getClickedInventory() == e.getInventory();
+        if ((top && e.getSlot() >= h.size) || isLock(e.getCurrentItem()) || isLock(e.getCursor())) e.setCancelled(true);
+        if (e.getClick() == ClickType.NUMBER_KEY && top && e.getSlot() >= h.size) e.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPackDrag(InventoryDragEvent e) {
+        if (!(e.getInventory().getHolder() instanceof PackHolder h)) return;
+        for (int raw : e.getRawSlots()) if (raw < 9 && raw >= h.size) { e.setCancelled(true); return; }
+    }
+
+    // ---------- alimentar o pet: regeneracao II ----------
+
+    private static boolean food(Kind k, Material m) {
+        return switch (k) {
+            case LOBO -> MEAT.contains(m) && m != Material.RABBIT_STEW;
+            case GATO -> m == Material.COD || m == Material.SALMON;
+            case RAPOSA -> m == Material.SWEET_BERRIES || m == Material.GLOW_BERRIES;
+        };
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOW)
+    public void onFeed(PlayerInteractEntityEvent e) {
+        if (e.getHand() != EquipmentSlot.HAND || !(e.getRightClicked() instanceof LivingEntity pet)) return;
+        UUID owner = ownerOf(pet);
+        Player p = e.getPlayer();
+        if (owner == null || !owner.equals(p.getUniqueId())) return;
+        PetData d = data.get(owner);
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        if (d == null || d.kind == null || !food(d.kind, hand.getType())) return;
+        e.setCancelled(true);
+        if (p.getGameMode() != GameMode.CREATIVE) hand.setAmount(hand.getAmount() - 1);
+        pet.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 200, 1, false, true, true));
+        pet.setHealth(Math.min(maxHealth(pet), pet.getHealth() + 4));
+        pet.getWorld().spawnParticle(Particle.HEART, pet.getLocation().add(0, pet.getHeight() + 0.3, 0), 4, 0.3, 0.2, 0.3, 0);
+        pet.getWorld().playSound(pet.getLocation(), Sound.ENTITY_GENERIC_EAT, 0.7f, 1.3f);
+        p.sendActionBar(Component.text("❤ " + d.kind.label + ": regeneracao II por 10 s (" + (int) pet.getHealth() + "/" + (int) maxHealth(pet) + ")", NamedTextColor.GREEN));
+    }
 
     // ---------- invocacao de admin (/classe give explorador) ----------
 
@@ -662,9 +753,9 @@ final class Explorer implements Listener {
         for (Kind k : Kind.values()) {
             List<String> lore = new ArrayList<>();
             switch (k) {
-                case LOBO -> lore.addAll(List.of("Combate: segue, morde quem voce", "ataca e quem te ataca.", "Vida e dano sobem com o nivel.", "Nivel 4: uivo marca os hostis.", "Aceita armadura de lobo."));
-                case RAPOSA -> lore.addAll(List.of("Coleta: mochila de " + packSize(lvl) + " espacos", "(9 / 18 no nivel 3 / 27 no 5).", "Pega itens do chao perto dela.", "Clique: abre a mochila.", "Agachado + clique: fica / segue."));
-                case GATO -> lore.addAll(List.of("Sobrevivencia: creepers e", "phantoms fogem dele.", "Parado do lado dele voce", "regenera vida (mais no nivel 5).", "Traz presentes de manha."));
+                case LOBO -> lore.addAll(List.of("Combate: segue, morde quem voce", "ataca e quem te ataca.", "Vida e dano sobem com o nivel.", "Nivel 4: uivo marca os hostis.", "Aceita armadura de lobo.", "Carne: regeneracao II."));
+                case RAPOSA -> lore.addAll(List.of("Coleta: mochila de " + packSize(lvl) + " espacos", "(3, 4, 5, 7 e 9 por nivel).", "Pega itens do chao perto dela.", "Clique: abre a mochila.", "Agachado + clique: fica / segue.", "Frutas doces: regeneracao II."));
+                case GATO -> lore.addAll(List.of("Sobrevivencia: creepers e", "phantoms fogem dele.", "Parado do lado dele voce", "regenera vida (mais no nivel 5).", "Traz presentes de manha.", "Peixe cru: regeneracao II."));
             }
             lore.add("");
             lore.add("Ritual: " + pretty(k.altar) + " no centro,");
@@ -705,11 +796,12 @@ final class Explorer implements Listener {
             lore.add(L == 1 ? "Inicial" : "Precisa de " + BabylonClasses.EXP_XP[i] + " XP");
             lore.add("");
             lore.add("+ Pet mais forte, carne +" + String.format(Locale.ROOT, "%.1f", 0.6 * L));
+            lore.add("+ Mochila da raposa: " + packSize(L) + " espacos");
             if (L == 1) lore.add("+ Ritual do companheiro");
             if (L == 2) lore.add("+ Ancora de Perola (500 blocos)");
-            if (L == 3) lore.add("+ Alcance 1000, mochila 18");
+            if (L == 3) lore.add("+ Alcance 1000");
             if (L == 4) lore.add("+ Alcance 2000, uivo do lobo");
-            if (L == 5) lore.add("+ Alcance 4000, mochila 27, regen II");
+            if (L == 5) lore.add("+ Alcance 4000, regen II do gato");
             lore.add("");
             lore.add(got ? "Liberado" : "Bloqueado");
             inv.setItem(29 + i, icon(got ? mats[i] : Material.BLACK_STAINED_GLASS_PANE, "Nivel " + L, got ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY, lore));
@@ -778,7 +870,7 @@ final class Explorer implements Listener {
             y.set(k + ".stay", d.stay);
             y.set(k + ".deaths", d.deaths);
             y.set(k + ".chunks", new ArrayList<>(d.chunks));
-            ItemStack[] items = d.pack != null ? d.pack.getContents() : d.packSaved;
+            ItemStack[] items = packItems(d);
             if (items != null) y.set(k + ".pack", Arrays.asList(items));
         }
         try { y.save(file); } catch (IOException ex) { plugin.getLogger().warning("explorer.yml: " + ex.getMessage()); }
