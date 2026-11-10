@@ -38,7 +38,7 @@ import java.util.*;
 /** Engenheiro: bancada, torres sentinela, geradores (carvao, geotermico, solar) e bateria. */
 final class Engineer implements Listener {
 
-    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano"};
+    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano", "forja", "bala_ferro", "bala_cobre"};
 
     // por nivel 1..5
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
@@ -56,6 +56,11 @@ final class Engineer implements Listener {
     /** Tiros que um cano aguenta (bola de fogo gasta 2). */
     static final int BARREL_MAX = 300;
     static final int XP_CRAFT = 3, XP_REPAIR = 5, XP_KILL = 1;
+    /** Forja: energia por segundo enquanto trabalha, segundos por lote (9 pepitas viram 8 balas). */
+    static final double FORGE_RATE = 4;
+    static final int FORGE_TIME = 6, FORGE_IN = 9, FORGE_OUT = 8;
+    /** Balas: dano fixo (sobe 0.5 por nivel), energia por tiro e desgaste do cano. Flecha faz ~6. */
+    static final double COPPER_DMG = 5, IRON_DMG = 7.5, COPPER_COST = 4, IRON_COST = 7;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
@@ -102,6 +107,7 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("cabo", 1, costs(Material.COPPER_INGOT, 2), 8));
         recipes.add(new Recipe("juncao", 1, costs(Material.COPPER_BLOCK, 1, Material.IRON_INGOT, 1, Material.REDSTONE, 2), 2));
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.COPPER_INGOT, 4, Material.IRON_INGOT, 2, Material.GOLD_INGOT, 1)));
+        recipes.add(new Recipe("forja", 2, costs(Material.BLAST_FURNACE, 1, Material.IRON_BLOCK, 2, Material.COPPER_BLOCK, 2, Material.REDSTONE_BLOCK, 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.COPPER_INGOT, 6, Material.REDSTONE_BLOCK, 1, Material.IRON_INGOT, 2)));
     }
 
@@ -153,6 +159,9 @@ final class Engineer implements Listener {
             case "inversor" -> { mat = Material.WAXED_COPPER_BULB; name = "Inversor CC/CA"; lore = List.of("Converte a energia dos paineis solares", "da rede (CC) para as maquinas (CA).", "Ate " + (int) INVERTER_RATE + " energia/s, 90% de eficiencia."); }
             case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor.", "Energizado da choque em quem encostar."); }
             case "cano" -> { mat = Material.IRON_BARS; name = "Cano da Torre"; lore = List.of("Peca de reposicao da Torre Sentinela.", "Aguenta " + BARREL_MAX + " tiros (bola de fogo conta 2).", "Troque pelo menu da torre."); }
+            case "forja" -> { mat = Material.BLAST_FURNACE; name = "Forja de Municao"; lore = List.of("Transforma pepitas em balas para a torre.", "9 pepitas de ferro ou cobre = " + FORGE_OUT + " balas.", "Gasta " + (int) FORGE_RATE + " energia/s, " + FORGE_TIME + "s por lote.", "Funil em cima abastece, embaixo retira."); }
+            case "bala_ferro" -> { mat = Material.IRON_NUGGET; name = "Bala de Ferro"; lore = List.of("Municao da Torre Sentinela.", "Tiro reto, " + IRON_DMG + " de dano.", "Gasta " + (int) IRON_COST + " energia e 2 de cano."); }
+            case "bala_cobre" -> { mat = Material.COPPER_NUGGET; name = "Bala de Cobre"; lore = List.of("Municao da Torre Sentinela.", "Tiro reto, " + COPPER_DMG + " de dano.", "Gasta " + (int) COPPER_COST + " energia e 1 de cano."); }
             case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
@@ -177,7 +186,8 @@ final class Engineer implements Listener {
         return switch (type) {
             case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
             case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
-            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; case "cano" -> "Cano da Torre"; default -> type;
+            case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; case "cano" -> "Cano da Torre";
+            case "forja" -> "Forja de Municao"; case "bala_ferro" -> "Bala de Ferro"; case "bala_cobre" -> "Bala de Cobre"; default -> type;
         };
     }
 
@@ -213,7 +223,7 @@ final class Engineer implements Listener {
             invalidate();
             return;
         }
-        if (type.equals("cano")) { e.setCancelled(true); return; }
+        if (type.equals("cano") || type.startsWith("bala")) { e.setCancelled(true); return; }
         Block b = e.getBlockPlaced();
         int lvl = plugin.level(p.getUniqueId());
         if (type.equals("torre") && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
@@ -312,6 +322,10 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onFurnaceBurn(FurnaceBurnEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
 
+    /** Fornalha de maquina (gerador, forja) acesa nao derrete minerio de graca. */
+    @EventHandler(ignoreCancelled = true)
+    public void onFurnaceSmelt(org.bukkit.event.inventory.FurnaceSmeltEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
+
     // ---------- interacao ----------
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
@@ -344,7 +358,7 @@ final class Engineer implements Listener {
                 e.setCancelled(true);
                 openBench(p);
             }
-            case "bateria", "geotermico", "solar", "carvao", "inversor" -> {
+            case "bateria", "geotermico", "solar", "carvao", "inversor", "forja" -> {
                 ItemStack hand = p.getInventory().getItemInMainHand();
                 if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return;
                 e.setCancelled(true);
@@ -444,7 +458,7 @@ final class Engineer implements Listener {
             lore.add("+ Ate " + MAX_TURRETS[i] + " torres");
             lore.add("+ Alcance " + RANGE[i] + " blocos");
             lore.add("+ " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[i]) + " tiros por segundo");
-            if (L == 2) lore.add("+ Libera Geotermico e Bateria");
+            if (L == 2) lore.add("+ Libera Geotermico, Bateria e Forja");
             if (L == 3) lore.add("+ Flecha de fogo (30%)");
             if (L == 5) lore.add("+ Tiro duplo");
             lore.add("");
@@ -463,7 +477,8 @@ final class Engineer implements Listener {
                 "Geradores enchem as baterias da rede.", "Solar e CC: precisa de Inversor na rede.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
-                "Flechas ou bolas de fogo dentro da torre,", "ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
+                "Flechas, bolas de fogo ou balas dentro", "da torre, ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
+                "Balas saem da Forja (nivel 2): tiro reto,", "cobre " + COPPER_DMG + " de dano, ferro " + IRON_DMG + ".",
                 "Aceita flecha com efeito e espectral.", "Nunca acerta jogador, pet ou animal."));
         boolean fxOn = plugin.fxEnabled(p);
         inv.setItem(8, icon(fxOn ? Material.GLOWSTONE_DUST : Material.GUNPOWDER, "Particulas de energia: " + (fxOn ? "ligadas" : "desligadas"),
@@ -668,6 +683,7 @@ final class Engineer implements Listener {
         Material want = switch (d.type) {
             case "bancada" -> Material.SMITHING_TABLE; case "torre" -> Material.DISPENSER; case "carvao" -> Material.FURNACE;
             case "geotermico" -> Material.MAGMA_BLOCK; case "solar" -> Material.DAYLIGHT_DETECTOR; case "inversor" -> Material.WAXED_COPPER_BULB;
+            case "forja" -> Material.BLAST_FURNACE;
             default -> Material.LODESTONE;
         };
         return b.getType() == want;
@@ -1029,6 +1045,7 @@ final class Engineer implements Listener {
         }
         // torres ligadas pagam manutencao todo segundo; sem pagar, ficam desligadas
         powerTicks++;
+        for (Device f : devices.values()) if (f.type.equals("forja")) tickForge(f);
         for (Device t : devices.values()) {
             if (!t.type.equals("torre")) continue;
             World w = Bukkit.getWorld(t.world);
@@ -1049,6 +1066,47 @@ final class Engineer implements Listener {
         }
         refreshLive();
         updateTags();
+    }
+
+    /** Pepita vanilla que a forja aceita e a bala que sai dela. */
+    private String forgeOutput(ItemStack in) {
+        if (in == null || typeOf(in) != null || in.getAmount() < FORGE_IN) return null;
+        return in.getType() == Material.IRON_NUGGET ? "bala_ferro" : in.getType() == Material.COPPER_NUGGET ? "bala_cobre" : null;
+    }
+
+    private void tickForge(Device f) {
+        f.lastRate = 0;
+        World w = Bukkit.getWorld(f.world);
+        if (!f.enabled || !loaded(f, w)) return;
+        Block b = w.getBlockAt(f.x, f.y, f.z);
+        if (!valid(f, b) || !(b.getState() instanceof org.bukkit.block.Furnace fu)) return;
+        org.bukkit.inventory.FurnaceInventory inv = fu.getInventory();
+        String out = forgeOutput(inv.getSmelting());
+        ItemStack res = inv.getResult();
+        boolean room = out != null && (res == null || res.getType() == Material.AIR
+                || (out.equals(typeOf(res)) && res.getAmount() + FORGE_OUT <= res.getMaxStackSize()));
+        if (!room) { f.burn = 0; return; }
+        if (!drain(f, FORGE_RATE, powerTicks % 3 == 0)) return; // sem energia: pausa, mantem o progresso
+        f.lastRate = FORGE_RATE;
+        f.burn++;
+        Location c = f.center(w);
+        if (fu.getBurnTime() < 30) { fu.setBurnTime((short) 40); fu.update(true, false); }
+        w.spawnParticle(Particle.LAVA, c.clone().add(0, 0.6, 0), 1, 0.2, 0.1, 0.2, 0);
+        if (f.burn < FORGE_TIME) { w.playSound(c, Sound.BLOCK_BLASTFURNACE_FIRE_CRACKLE, 0.6f, 1f); return; }
+        f.burn = 0;
+        // re-le o estado depois do update para nao perder itens colocados por funil
+        if (!(b.getState() instanceof org.bukkit.block.Furnace fresh)) return;
+        inv = fresh.getInventory();
+        ItemStack in = inv.getSmelting();
+        if (!out.equals(forgeOutput(in))) return;
+        in.setAmount(in.getAmount() - FORGE_IN);
+        inv.setSmelting(in.getAmount() > 0 ? in : null);
+        ItemStack r = inv.getResult();
+        if (r == null || r.getType() == Material.AIR) { r = item(out); r.setAmount(FORGE_OUT); }
+        else r.setAmount(r.getAmount() + FORGE_OUT);
+        inv.setResult(r);
+        w.playSound(c, Sound.BLOCK_ANVIL_USE, 0.5f, 1.4f);
+        w.spawnParticle(Particle.FLAME, c.clone().add(0, 0.6, 0), 8, 0.2, 0.2, 0.2, 0.02);
     }
 
     /** Fontes que podem pagar um tiro: geradores CA primeiro, depois baterias que fornecem. */
@@ -1111,9 +1169,10 @@ final class Engineer implements Listener {
         for (int i = 0; i < 27; i++) inv.setItem(i, filler);
         Net n = net(d);
         List<String> info = new ArrayList<>();
-        info.add("Energia: " + (int) d.energy + "/" + (int) d.cap());
-        if (!d.type.equals("bateria")) info.add(String.format(Locale.ROOT, "Gerando: %.1f/s", d.lastRate));
+        if (d.isSource()) info.add("Energia: " + (int) d.energy + "/" + (int) d.cap());
+        if (!d.type.equals("bateria") && !d.type.equals("forja")) info.add(String.format(Locale.ROOT, "Gerando: %.1f/s", d.lastRate));
         if (d.type.equals("carvao")) info.add("Queimando: " + d.burn + "s");
+        if (d.type.equals("forja")) { info.clear(); info.add(d.lastRate > 0 ? "Forjando: " + d.burn + "/" + FORGE_TIME + "s" : "Parada"); info.add("Consome " + (int) FORGE_RATE + "/s trabalhando"); info.add("Energia na rede: " + (int) networkEnergy(d, w)); }
         if (d.type.equals("solar") && n.count("inversor") == 0) info.add("SEM INVERSOR: energia parada");
         if (d.type.equals("inversor")) info.add("Paineis na rede: " + n.count("solar"));
         OfflinePlayer owner = Bukkit.getOfflinePlayer(d.owner);
@@ -1124,6 +1183,8 @@ final class Engineer implements Listener {
                 d.enabled ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (d.enabled ? "desligar" : "ligar") + "."));
         if (d.type.equals("carvao"))
             inv.setItem(12, icon(Material.COAL, "Combustivel", NamedTextColor.WHITE, "Abre a fornalha para colocar", "carvao, bloco de carvao, vara", "de blaze ou bloco de alga seca."));
+        if (d.type.equals("forja"))
+            inv.setItem(12, icon(Material.IRON_NUGGET, "Abrir forja", NamedTextColor.WHITE, "Pepitas de ferro ou cobre em cima,", "balas saem no resultado.", "9 pepitas = " + FORGE_OUT + " balas."));
         if (d.type.equals("bateria"))
             inv.setItem(12, icon(Material.COMPARATOR, "Modo: " + BAT_MODES[d.mode], NamedTextColor.YELLOW,
                     "Carrega e fornece: normal.", "So carrega: guarda para depois.", "So fornece: nao aceita carga.", "", "Clique para trocar."));
@@ -1154,7 +1215,7 @@ final class Engineer implements Listener {
             case 10 -> d.enabled = !d.enabled;
             case 12 -> {
                 if (d.type.equals("bateria")) d.mode = (d.mode + 1) % BAT_MODES.length;
-                else if (d.type.equals("carvao") && w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) { p.openInventory(c.getInventory()); return; }
+                else if ((d.type.equals("carvao") || d.type.equals("forja")) && w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) { p.openInventory(c.getInventory()); return; }
                 else return;
             }
             case 14 -> d.tagOn = !d.tagOn;
@@ -1170,19 +1231,25 @@ final class Engineer implements Listener {
 
     // ---------- torres ----------
 
-    /** {flechas, bolas de fogo} */
+    /** {flechas, bolas de fogo, balas} */
     private int[] ammo(Block b) {
-        int[] n = new int[2];
+        int[] n = new int[3];
         if (!(b.getState() instanceof Container c)) return n;
         for (ItemStack it : c.getInventory().getContents()) {
-            if (it == null) continue;
-            if (isArrow(it.getType())) n[0] += it.getAmount();
-            else if (it.getType() == Material.FIRE_CHARGE) n[1] += it.getAmount();
+            int k = ammoKind(it);
+            if (k > 0) n[k - 1] += it.getAmount();
         }
         return n;
     }
 
-    private static boolean isAmmo(Material m) { return isArrow(m) || m == Material.FIRE_CHARGE; }
+    /** 0 nada, 1 flecha, 2 bola de fogo, 3 bala. */
+    private int ammoKind(ItemStack it) {
+        if (it == null) return 0;
+        String t = typeOf(it);
+        if (t != null) return t.startsWith("bala") ? 3 : 0;
+        if (isArrow(it.getType())) return 1;
+        return it.getType() == Material.FIRE_CHARGE ? 2 : 0;
+    }
 
     private static boolean isArrow(Material m) { return m == Material.ARROW || m == Material.TIPPED_ARROW || m == Material.SPECTRAL_ARROW; }
 
@@ -1213,15 +1280,17 @@ final class Engineer implements Listener {
             ItemStack[] inv = cont.getInventory().getContents();
             for (int pass = 0; pass < 2 && ammo == null; pass++)
                 for (int i = 0; i < inv.length; i++) {
-                    if (inv[i] == null || !isAmmo(inv[i].getType())) continue;
-                    boolean fire = inv[i].getType() == Material.FIRE_CHARGE;
-                    boolean wanted = t.ammoPref == 0 || (t.ammoPref == 1 && !fire) || (t.ammoPref == 2 && fire);
+                    int kind = ammoKind(inv[i]);
+                    if (kind == 0) continue;
+                    boolean wanted = t.ammoPref == 0 || t.ammoPref == kind;
                     if (pass == 0 && !wanted) continue; // primeiro a preferida, depois qualquer uma
                     ammo = inv[i]; slot = i; break;
                 }
             if (ammo == null) { t.nextShot = tick + 40; continue; }
             boolean fireball = ammo.getType() == Material.FIRE_CHARGE;
-            double speed = fireball ? 1.8 : 2.6;
+            String bullet = typeOf(ammo); // bala_ferro, bala_cobre ou null
+            boolean iron = "bala_ferro".equals(bullet);
+            double speed = fireball ? 1.8 : bullet != null ? 3.5 : 2.6;
 
             List<LivingEntity> cands = new ArrayList<>();
             for (Entity en : w.getNearbyEntities(c, range, range, range)) {
@@ -1247,18 +1316,19 @@ final class Engineer implements Listener {
                 Vector fromMuzzle = le.getEyeLocation().toVector().subtract(muzzle.toVector());
                 RayTraceResult hit = w.rayTraceBlocks(muzzle, fromMuzzle.clone().normalize(), fromMuzzle.length(), FluidCollisionMode.NEVER, true);
                 if (hit != null) continue;
-                best = le; bestAim = aimPoint(le, c, speed, !fireball);
+                best = le; bestAim = aimPoint(le, c, speed, !fireball && bullet == null);
                 break;
             }
             if (best == null) continue;
-            if (!drain(t, fireball ? FIREBALL_COST : SHOT_COST)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
+            double cost = fireball ? FIREBALL_COST : bullet == null ? SHOT_COST : iron ? IRON_COST : COPPER_COST;
+            if (!drain(t, cost)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
 
             ItemStack shot = ammo.clone(); shot.setAmount(1);
             ammo.setAmount(ammo.getAmount() - 1);
             cont.getInventory().setItem(slot, ammo.getAmount() > 0 ? ammo : null);
 
             int shots = lvl >= 5 ? 2 : 1;
-            t.barrel = Math.max(0, t.barrel - shots * (fireball ? 2 : 1));
+            t.barrel = Math.max(0, t.barrel - shots * (fireball || iron ? 2 : 1));
             if (t.barrel == 0) {
                 w.playSound(c, Sound.ENTITY_ITEM_BREAK, 1f, 0.7f);
                 w.spawnParticle(Particle.LARGE_SMOKE, c.clone().add(0, 0.6, 0), 10, 0.2, 0.2, 0.2, 0.02);
@@ -1268,6 +1338,11 @@ final class Engineer implements Listener {
             if (fireball) {
                 for (int s = 0; s < shots; s++) fireball(w, c, bestAim, t, s == 0 ? 0 : 0.08);
                 w.playSound(c, Sound.ITEM_FIRECHARGE_USE, 0.7f, 1.2f);
+            } else if (bullet != null) {
+                double dmg = (iron ? IRON_DMG : COPPER_DMG) + 0.5 * (lvl - 1);
+                for (int s = 0; s < shots; s++) bullet(w, c, bestAim, t, shot, dmg, s == 0 ? 0 : 0.05);
+                w.playSound(c, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.6f, iron ? 1.6f : 1.9f);
+                w.spawnParticle(Particle.SMOKE, c.clone().add(bestAim.clone().subtract(c.toVector()).normalize().multiply(0.9)), 3, 0.05, 0.05, 0.05, 0.01);
             } else {
                 for (int s = 0; s < shots; s++) fire(w, c, bestAim, shot, t, lvl, s == 0 ? 0.4f : 2.5f);
                 w.playSound(c, Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.4f);
@@ -1310,6 +1385,40 @@ final class Engineer implements Listener {
         a.setDamage(2.0 + 0.25 * (lvl - 1));
         if (lvl >= 3 && Math.random() < 0.3) a.setFireTicks(100);
         a.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+    }
+
+    private final NamespacedKey bulletKey() { return new NamespacedKey(plugin, "bullet-dmg"); }
+
+    /** Bala: projetil reto e rapido (sem gravidade); o dano e aplicado no impacto. */
+    private void bullet(World w, Location c, Vector aim, Device t, ItemStack look, double dmg, double jitter) {
+        Vector dir = aim.clone().subtract(c.toVector()).normalize();
+        if (jitter > 0) dir.add(new Vector(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiply(jitter)).normalize();
+        Location muzzle = c.clone().add(dir.clone().multiply(0.9));
+        Snowball sb = w.spawn(muzzle, Snowball.class, f -> {
+            f.setItem(look);
+            f.setGravity(false);
+            f.setVelocity(dir.clone().multiply(3.5));
+            f.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+            f.getPersistentDataContainer().set(bulletKey(), PersistentDataType.DOUBLE, dmg);
+        });
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (sb.isValid()) sb.remove(); }, 30L);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBulletHit(org.bukkit.event.entity.ProjectileHitEvent e) {
+        Double dmg = e.getEntity().getPersistentDataContainer().get(bulletKey(), PersistentDataType.DOUBLE);
+        if (dmg == null) return;
+        e.setCancelled(true);
+        Projectile pr = e.getEntity();
+        Location at = pr.getLocation();
+        if (e.getHitEntity() instanceof LivingEntity le && le instanceof Enemy) {
+            le.setNoDamageTicks(0);
+            le.damage(dmg, pr);
+            at.getWorld().spawnParticle(Particle.CRIT, le.getLocation().add(0, le.getHeight() * 0.6, 0), 6, 0.2, 0.2, 0.2, 0.1);
+        } else if (e.getHitBlock() != null) {
+            at.getWorld().spawnParticle(Particle.BLOCK, at, 6, 0.05, 0.05, 0.05, e.getHitBlock().getBlockData());
+        }
+        pr.remove();
     }
 
     private void fireball(World w, Location c, Vector aim, Device t, double jitter) {
@@ -1371,12 +1480,12 @@ final class Engineer implements Listener {
                 if (!d.enabled) state = Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD);
                 else if (d.barrel <= 0) state = Component.text("CANO GASTO", NamedTextColor.RED, TextDecoration.BOLD);
                 else if (sourcesFor(d).isEmpty()) state = Component.text("SEM REDE", NamedTextColor.RED, TextDecoration.BOLD);
-                else if (am[0] + am[1] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (am[0] + am[1] + am[2] == 0) state = Component.text("SEM MUNICAO", NamedTextColor.RED, TextDecoration.BOLD);
                 else if (!d.powered || net < SHOT_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
                 else state = Component.text("⚡ " + (int) net + " na rede  ", NamedTextColor.YELLOW)
                         .append(Component.text(String.format(Locale.ROOT, "-%.2f/s", upkeep(lvl)), NamedTextColor.RED));
                 return name.append(nl).append(Component.text("Nivel " + lvl + "  •  alcance " + RANGE[lvl - 1], g))
-                        .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo  ", NamedTextColor.WHITE))
+                        .append(nl).append(Component.text("➶ " + am[0] + " flechas  ☄ " + am[1] + " fogo  • " + am[2] + " balas  ", NamedTextColor.WHITE))
                         .append(Component.text("cano " + (100 * d.barrel / BARREL_MAX) + "%", d.barrel > BARREL_MAX / 5 ? NamedTextColor.GRAY : NamedTextColor.RED))
                         .append(nl).append(state);
             }
@@ -1481,7 +1590,7 @@ final class Engineer implements Listener {
     static final Material[] CAT_ICON = {Material.ZOMBIE_HEAD, Material.SKELETON_SKULL, Material.CREEPER_HEAD,
             Material.SPIDER_EYE, Material.BLAZE_POWDER, Material.PHANTOM_MEMBRANE, Material.ZOMBIE_VILLAGER_SPAWN_EGG};
     static final String[] PRIOS = {"Mais perto", "Menos vida", "Mais vida"};
-    static final String[] AMMOS = {"Qualquer", "Flechas", "Bolas de fogo"};
+    static final String[] AMMOS = {"Qualquer", "Flechas", "Bolas de fogo", "Balas"};
 
     static int category(LivingEntity e) {
         if (e instanceof PigZombie || e instanceof PiglinAbstract || e instanceof Blaze || e instanceof Ghast
@@ -1521,8 +1630,8 @@ final class Engineer implements Listener {
                 String.format(Locale.ROOT, "Consumo ligada: %.2f/s + %d por tiro", upkeep(lvl), (int) SHOT_COST),
                 d.enabled && !d.powered ? "SEM ENERGIA: nao esta atirando" : ""));
         inv.setItem(10, icon(Material.CHEST, "Municao", NamedTextColor.WHITE,
-                am[0] + " flechas, " + am[1] + " bolas de fogo", "", "Clique para abrir e colocar", "flechas ou bolas de fogo."));
-        Material am2 = d.ammoPref == 2 ? Material.FIRE_CHARGE : d.ammoPref == 1 ? Material.ARROW : Material.BOW;
+                am[0] + " flechas, " + am[1] + " bolas de fogo, " + am[2] + " balas", "", "Clique para abrir e colocar", "flechas, bolas de fogo ou balas."));
+        Material am2 = switch (d.ammoPref) { case 1 -> Material.ARROW; case 2 -> Material.FIRE_CHARGE; case 3 -> Material.IRON_NUGGET; default -> Material.BOW; };
         inv.setItem(12, icon(am2, "Municao preferida: " + AMMOS[d.ammoPref], NamedTextColor.YELLOW,
                 "Usa esta primeiro. Se acabar,", "usa a outra.", "", "Clique para trocar."));
         inv.setItem(14, icon(Material.TARGET, "Prioridade: " + PRIOS[d.prio], NamedTextColor.YELLOW,
@@ -1537,7 +1646,7 @@ final class Engineer implements Listener {
         int pct = 100 * d.barrel / BARREL_MAX;
         inv.setItem(20, icon(d.barrel > 0 ? Material.IRON_BARS : Material.BARRIER, "Cano: " + d.barrel + "/" + BARREL_MAX + " tiros (" + pct + "%)",
                 d.barrel > BARREL_MAX / 5 ? NamedTextColor.GREEN : NamedTextColor.RED,
-                bar(d.barrel, BARREL_MAX), "Cada tiro gasta 1, bola de fogo 2.", "Gasto: a torre para de atirar.", "",
+                bar(d.barrel, BARREL_MAX), "Cada tiro gasta 1; bola de fogo e", "bala de ferro gastam 2.", "Gasto: a torre para de atirar.", "",
                 "Clique com um Cano da Torre no", "inventario para trocar (+" + XP_REPAIR + " XP)."));
         inv.setItem(22, icon(Material.OAK_SIGN, "Filtro de mobs", NamedTextColor.WHITE, "Escolha abaixo em quem", "a torre atira."));
         inv.setItem(38, icon(d.enabled ? Material.LIME_DYE : Material.GRAY_DYE, d.enabled ? "Ligada" : "Desligada",

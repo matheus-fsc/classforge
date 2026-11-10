@@ -19,7 +19,7 @@ Feito para **Paper 26.3** (Java 25). Mensagens em portugues (pt-BR). Pensado par
 | Nivel | XP  | Torres | Alcance | Tiros/s | Extra |
 |-------|-----|--------|---------|---------|-------|
 | 1     | 0   | 2      | 12      | 1.0     |       |
-| 2     | 25  | 3      | 14      | 1.2     | Geotermico e Bateria |
+| 2     | 25  | 3      | 14      | 1.2     | Geotermico, Bateria e Forja |
 | 3     | 75  | 4      | 16      | 1.4     | Flecha de fogo (30%) |
 | 4     | 175 | 5      | 18      | 1.7     |       |
 | 5     | 350 | 6      | 20      | 2.0     | Tiro duplo |
@@ -31,13 +31,16 @@ Receita na mesa de trabalho: mesa de trabalho no centro, 5 ferros embaixo e dos 
 
 ### Dispositivos
 
-- **Torre Sentinela** (dispenser): atira flechas (normais, com efeito, espectrais) ou bolas de fogo guardadas nela em mobs hostis. Mira na frente do alvo e compensa a queda da flecha. Nunca acerta jogador, pet ou animal. Menu com municao preferida, prioridade de alvo, filtro de mobs, liga/desliga e alcance.
-  - Consome energia ligada mesmo parada (2.0/s, sobe com o nivel) e mais por tiro (5 flecha, 10 bola de fogo).
-  - **Cano**: aguenta 300 tiros (bola de fogo conta 2). Gasto, a torre para. Troque pelo menu da torre com um Cano da Torre. O desgaste fica salvo no item se a torre for quebrada.
+- **Torre Sentinela** (dispenser): atira flechas (normais, com efeito, espectrais), bolas de fogo ou balas guardadas nela em mobs hostis. Mira na frente do alvo e compensa a queda da flecha. Nunca acerta jogador, pet ou animal. Menu com municao preferida, prioridade de alvo, filtro de mobs, liga/desliga e alcance.
+  - Consome energia ligada mesmo parada (2.0/s, sobe com o nivel) e mais por tiro (5 flecha, 10 bola de fogo, 4 bala de cobre, 7 bala de ferro).
+  - **Cano**: aguenta 300 tiros (bola de fogo e bala de ferro contam 2). Gasto, a torre para. Troque pelo menu da torre com um Cano da Torre. O desgaste fica salvo no item se a torre for quebrada.
 - **Gerador a Carvao** (fornalha): 4 energia/s enquanto queima.
 - **Gerador Geotermico** (bloco de magma): 0.5/s por fonte de lava encostada, dobro no Nether.
 - **Painel Solar** (sensor de luz): 1.5/s de dia com ceu aberto. Gera corrente continua: precisa de um **Inversor CC/CA** na rede (ate 8/s, 90% de eficiencia).
 - **Bateria** (magnetita): guarda ate 5000. Modos: carrega e fornece, so carrega, so fornece.
+- **Forja de Municao** (alto-forno, nivel 2): 9 pepitas de ferro ou cobre viram 8 balas em 6 segundos, gastando 4 energia/s da rede. Funil em cima abastece, funil embaixo retira. Nao derrete minerio.
+  - **Bala de Cobre**: tiro reto e rapido, 5 de dano (+0.5 por nivel), 4 de energia, 1 de cano.
+  - **Bala de Ferro**: tiro reto e rapido, 7.5 de dano (+0.5 por nivel), 7 de energia, 2 de cano.
 
 ### Rede eletrica
 

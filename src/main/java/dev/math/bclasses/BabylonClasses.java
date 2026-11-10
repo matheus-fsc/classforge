@@ -215,6 +215,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
                     if (it == null) continue;
                     if (type.equals("cabo") || type.equals("juncao")) it.setAmount(64);
                     else if (type.equals("cano") || type.equals("solar")) it.setAmount(4);
+                    else if (type.startsWith("bala")) it.setAmount(64);
                     items.add(it);
                 }
             } else if (which.startsWith("exp")) {
