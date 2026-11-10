@@ -2214,6 +2214,13 @@ final class Engineer implements Listener {
     }
 
     static final String TAG_MARK = "bc_device_tag";
+    static final float TAG_SCALE = 0.55f;
+
+    private static org.bukkit.util.Transformation tagScale(TextDisplay td) {
+        org.bukkit.util.Transformation t = td.getTransformation();
+        return new org.bukkit.util.Transformation(t.getTranslation(), t.getLeftRotation(),
+                new org.joml.Vector3f(TAG_SCALE, TAG_SCALE, TAG_SCALE), t.getRightRotation());
+    }
     private int sweepTick;
 
     /** Apaga etiquetas orfas (dispositivo removido, chunk recarregado, referencia perdida). */
@@ -2237,7 +2244,7 @@ final class Engineer implements Listener {
             if (!loaded(d, w)) { removeTag(d); continue; }
             if (followers.contains(d) || !d.tagOn) { removeTag(d); continue; }
             Block b = w.getBlockAt(d.x, d.y, d.z);
-            Location at = new Location(w, d.x + 0.5, d.y + 1.55, d.z + 0.5);
+            Location at = new Location(w, d.x + 0.5, d.y + 1.3, d.z + 0.5);
             Component text;
             List<Device> group = clusters.get(d);
             if (group != null) {
@@ -2251,6 +2258,7 @@ final class Engineer implements Listener {
                 d.tag = w.spawn(at, TextDisplay.class, td -> {
                     td.setPersistent(false);
                     td.addScoreboardTag(TAG_MARK);
+                    td.setTransformation(tagScale(td));
                     td.setBillboard(Display.Billboard.CENTER);
                     td.setShadowed(true);
                     td.setViewRange(TAG_RANGE); // so aparece de perto (~6 blocos)
@@ -2261,6 +2269,7 @@ final class Engineer implements Listener {
             } else {
                 d.tag.text(text);
                 if (d.tag.getViewRange() != TAG_RANGE) d.tag.setViewRange(TAG_RANGE);
+                if (d.tag.getTransformation().getScale().x() != TAG_SCALE) d.tag.setTransformation(tagScale(d.tag));
                 if (d.tag.getLocation().distanceSquared(at) > 0.01) d.tag.teleport(at);
             }
         }
