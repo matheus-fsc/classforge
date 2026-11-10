@@ -43,6 +43,20 @@ Receita na mesa de trabalho: mesa de trabalho no centro, 5 ferros embaixo e dos 
   - **Bala de Cobre**: 2 de dano por bala (+0.25 por nivel), 2 de energia por bala, 1 de cano por rajada.
   - **Bala de Ferro**: 3 de dano por bala (+0.25 por nivel), 3 de energia por bala, 2 de cano por rajada.
 
+### Maquinas
+
+Todas gastam energia da rede enquanto trabalham e so processam o que voce coloca nelas. Clique numa maquina para ver o menu (liga/desliga, inventario, etiqueta, rede).
+
+- **Forja** (nivel 2): alem das balas, prensa 1 bloco de ferro em 1 **Ferro Industrial** (20 s, 6 energia/s). O Ferro Industrial e peca obrigatoria das maquinas abaixo.
+- **Fornalha Eletrica** (defumador, nivel 3): derrete tudo que a fornalha comum derrete, 2x mais rapido, sem combustivel. 4 energia/s (20 por item).
+- **Triturador** (liberador, nivel 3): minerio bruto (ou bloco de minerio) vira minerio triturado, com 35% de chance de render 1 a mais. Triturado derrete como o bruto. Pedregulho vira cascalho e cascalho vira areia. 5 energia/s, 4 s por item. Saida no bau embaixo ou no proprio inventario; funil so puxa o que ja foi triturado.
+- **Plantadeira** (barril, nivel 3): planta as sementes guardadas nela na terra arada em volta (raio 4, nivel 4: 5, nivel 5: 6). Fungo do Nether vai na areia das almas. 1 energia por semente.
+- **Montadora** (crafter, nivel 4): monta sozinha um item da bancada (escolha no menu). Materiais dentro dela ou no bau em cima, resultado no bau ou funil embaixo. 5 energia/s, 10 s por item. Nao da XP.
+- **Escudo Eletrico** (para-raios, nivel 4): empurra mobs hostis num raio de 5 (nivel 5: 6) com descargas de 1 de dano. 3 energia/s ligado e 1 por mob. Limite de 1 (nivel 5: 2).
+- **Mineradora** (funil, nivel 5): escava uma area 5x5 embaixo dela, camada por camada, ate o fundo do mundo. 1 bloco a cada 3 s, 12 energia por bloco. Os itens caem no funil (aponte para um bau). Nao quebra baus, maquinas, cabos, liquidos nem bedrock. Limite de 1.
+
+A bancada e o painel separam as receitas em abas: Defesa, Energia e Maquinas. Na aba, clique para ver o craft ou shift-clique para montar direto.
+
 ### Rede eletrica
 
 - **Cabo** (corrente de cobre encerada): liga tudo que encosta nele. Qualquer corrente de cobre conduz.

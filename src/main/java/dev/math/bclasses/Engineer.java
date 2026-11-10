@@ -38,7 +38,18 @@ import java.util.*;
 /** Engenheiro: bancada, torres sentinela, geradores (carvao, geotermico, solar) e bateria. */
 final class Engineer implements Listener {
 
-    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano", "forja", "bala_ferro", "bala_cobre"};
+    static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano", "forja", "bala_ferro", "bala_cobre",
+            "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora", "ferro_industrial"};
+
+    static final String[] TABS = {"Defesa", "Energia", "Maquinas"};
+    static int tabOf(String type) {
+        return switch (type) {
+            case "torre", "cano", "escudo", "bala_ferro", "bala_cobre" -> 0;
+            case "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao" -> 1;
+            default -> 2;
+        };
+    }
+    static final Set<String> MACHINES = Set.of("forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora");
 
     // por nivel 1..5
     static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
@@ -66,10 +77,25 @@ final class Engineer implements Listener {
      */
     static final int BURST = 3;
     static final double COPPER_DMG = 2, IRON_DMG = 3, COPPER_COST = 2, IRON_COST = 3;
+    /** Forja tambem prensa bloco de ferro em Ferro Industrial (mais lento e caro). */
+    static final double INDUSTRIAL_RATE = 6; static final int INDUSTRIAL_TIME = 20;
+    /** Fornalha eletrica: 2x mais rapida que a vanilla, 20 de energia por item. */
+    static final double SMELT_RATE = 4; static final int SMELT_TIME = 5;
+    /** Triturador: 1 minerio vira 1 triturado + 35% de chance de outro. */
+    static final double CRUSH_RATE = 5; static final int CRUSH_TIME = 4; static final double CRUSH_BONUS = 0.35;
+    /** Plantadeira: 1 energia por semente, ate 2 sementes a cada 2 s. */
+    static final double PLANT_COST = 1;
+    /** Montadora: 5/s, 10 s por item. */
+    static final double ASSEMBLE_RATE = 5; static final int ASSEMBLE_TIME = 10;
+    /** Escudo: manutencao por segundo + energia por mob empurrado. */
+    static final double SHIELD_UPKEEP = 3, SHIELD_PUSH = 1;
+    /** Mineradora: 1 bloco a cada 3 s, 12 de energia por bloco, area 5x5. */
+    static final double MINE_COST = 12; static final int MINE_TIME = 3, MINE_R = 2;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
         double energy, lastRate; int burn; long nextShot; boolean powered; int barrel = BARREL_MAX;
+        int cursor; String sel = "cabo"; String status = "";
         TextDisplay tag;
         boolean tagOn = true, enabled = true; int filter = 0b1111111; int prio; int ammoPref; int mode;
         Device(String type, String world, int x, int y, int z, UUID owner) {
@@ -83,8 +109,10 @@ final class Engineer implements Listener {
         boolean isSource() { return cap() > 0; }
     }
 
-    record Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount) {
-        Recipe(String type, int minLevel, Map<Material, Integer> cost) { this(type, minLevel, cost, 1); }
+    /** cost = materiais vanilla; parts = itens da classe (ex.: ferro_industrial). */
+    record Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount, Map<String, Integer> parts) {
+        Recipe(String type, int minLevel, Map<Material, Integer> cost) { this(type, minLevel, cost, 1, Map.of()); }
+        Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount) { this(type, minLevel, cost, amount, Map.of()); }
     }
 
     private final BabylonClasses plugin;
@@ -114,6 +142,12 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.COPPER_INGOT, 4, Material.IRON_INGOT, 2, Material.GOLD_INGOT, 1)));
         recipes.add(new Recipe("forja", 2, costs(Material.BLAST_FURNACE, 1, Material.IRON_BLOCK, 2, Material.COPPER_BLOCK, 2, Material.REDSTONE_BLOCK, 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.COPPER_INGOT, 6, Material.REDSTONE_BLOCK, 1, Material.IRON_INGOT, 2)));
+        recipes.add(new Recipe("fornalha", 3, costs(Material.FURNACE, 1, Material.COPPER_INGOT, 4, Material.REDSTONE, 4), 1, Map.of("ferro_industrial", 1)));
+        recipes.add(new Recipe("triturador", 3, costs(Material.GRINDSTONE, 1, Material.DIAMOND, 1, Material.REDSTONE_BLOCK, 1), 1, Map.of("ferro_industrial", 2)));
+        recipes.add(new Recipe("plantadeira", 3, costs(Material.COMPOSTER, 1, Material.DROPPER, 1, Material.COPPER_INGOT, 4), 1, Map.of("ferro_industrial", 1)));
+        recipes.add(new Recipe("montadora", 4, costs(Material.CRAFTER, 1, Material.REDSTONE_BLOCK, 2, Material.GOLD_INGOT, 2), 1, Map.of("ferro_industrial", 2)));
+        recipes.add(new Recipe("escudo", 4, costs(Material.COPPER_BLOCK, 4, Material.AMETHYST_SHARD, 4, Material.DIAMOND, 1), 1, Map.of("ferro_industrial", 3)));
+        recipes.add(new Recipe("mineradora", 5, costs(Material.DIAMOND_PICKAXE, 1, Material.OBSERVER, 1, Material.REDSTONE_BLOCK, 2), 1, Map.of("ferro_industrial", 4)));
     }
 
     private static Map<Material, Integer> costs(Object... kv) {
@@ -167,6 +201,13 @@ final class Engineer implements Listener {
             case "forja" -> { mat = Material.BLAST_FURNACE; name = "Forja de Municao"; lore = List.of("Transforma pepitas em balas para a torre.", "9 pepitas de ferro ou cobre = " + FORGE_OUT + " balas.", "Gasta " + (int) FORGE_RATE + " energia/s, " + FORGE_TIME + "s por lote.", "Funil em cima abastece, embaixo retira."); }
             case "bala_ferro" -> { mat = Material.IRON_NUGGET; name = "Bala de Ferro"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", IRON_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) IRON_COST + " energia por bala", "e 2 de cano por rajada."); }
             case "bala_cobre" -> { mat = Material.COPPER_NUGGET; name = "Bala de Cobre"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", COPPER_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) COPPER_COST + " energia por bala", "e 1 de cano por rajada."); }
+            case "fornalha" -> { mat = Material.SMOKER; name = "Fornalha Eletrica"; lore = List.of("Derrete qualquer coisa da fornalha comum", "2x mais rapido, sem combustivel.", "Gasta " + (int) SMELT_RATE + " energia/s (" + (int) (SMELT_RATE * SMELT_TIME) + " por item).", "Funil em cima abastece, embaixo retira."); }
+            case "triturador" -> { mat = Material.DROPPER; name = "Triturador"; lore = List.of("Minerio bruto vira triturado, com", (int) (CRUSH_BONUS * 100) + "% de chance de render 1 a mais.", "Triturado derrete como o minerio normal.", "Pedregulho vira cascalho, cascalho vira areia.", "Gasta " + (int) CRUSH_RATE + " energia/s. Saida: bau embaixo", "ou no proprio inventario."); }
+            case "plantadeira" -> { mat = Material.BARREL; name = "Plantadeira"; lore = List.of("Planta as sementes guardadas nela", "na terra arada em volta (raio 4 a 6).", "Fungo do Nether vai na areia das almas.", (int) PLANT_COST + " energia por semente."); }
+            case "montadora" -> { mat = Material.CRAFTER; name = "Montadora"; lore = List.of("Monta sozinha um item da Engenharia.", "Materiais: dentro dela ou no bau em cima.", "Resultado: bau ou funil embaixo.", "Gasta " + (int) ASSEMBLE_RATE + " energia/s, " + ASSEMBLE_TIME + "s por item."); }
+            case "escudo" -> { mat = Material.LIGHTNING_ROD; name = "Escudo Eletrico"; lore = List.of("Empurra mobs hostis para longe", "com descargas (raio 5, nivel 5: 6).", "Gasta " + (int) SHIELD_UPKEEP + "/s ligado e " + (int) SHIELD_PUSH + " por mob."); }
+            case "mineradora" -> { mat = Material.HOPPER; name = "Mineradora"; lore = List.of("Escava uma area 5x5 embaixo dela,", "camada por camada, ate o fundo.", "1 bloco a cada " + MINE_TIME + "s, " + (int) MINE_COST + " de energia por bloco.", "Itens saem pelo funil (aponte para um bau).", "Nao quebra baus, maquinas nem cabos."); }
+            case "ferro_industrial" -> { mat = Material.IRON_INGOT; name = "Ferro Industrial"; lore = List.of("Bloco de ferro prensado na Forja.", "Peca das maquinas avancadas."); }
             case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
@@ -178,6 +219,20 @@ final class Engineer implements Listener {
         l.add(Component.text("Engenharia", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         m.lore(l);
         m.getPersistentDataContainer().set(devKey, PersistentDataType.STRING, type);
+        if (type.equals("ferro_industrial")) m.setEnchantmentGlintOverride(true);
+        it.setItemMeta(m);
+        return it;
+    }
+
+    /** Minerio triturado: mesmo material do bruto (derrete igual), marcado para nao ser triturado de novo. */
+    ItemStack crushed(Material raw, int amount) {
+        ItemStack it = new ItemStack(raw, amount);
+        ItemMeta m = it.getItemMeta();
+        String n = switch (raw) { case RAW_GOLD -> "Ouro Triturado"; case RAW_COPPER -> "Cobre Triturado"; default -> "Ferro Triturado"; };
+        m.displayName(Component.text(n, NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+        m.lore(List.of(Component.text("Derrete numa fornalha como o bruto.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("Engenharia", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)));
+        m.getPersistentDataContainer().set(devKey, PersistentDataType.STRING, "triturado");
         it.setItemMeta(m);
         return it;
     }
@@ -192,7 +247,10 @@ final class Engineer implements Listener {
             case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
             case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
             case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; case "cano" -> "Cano da Torre";
-            case "forja" -> "Forja de Municao"; case "bala_ferro" -> "Bala de Ferro"; case "bala_cobre" -> "Bala de Cobre"; default -> type;
+            case "forja" -> "Forja de Municao"; case "bala_ferro" -> "Bala de Ferro"; case "bala_cobre" -> "Bala de Cobre";
+            case "fornalha" -> "Fornalha Eletrica"; case "triturador" -> "Triturador"; case "plantadeira" -> "Plantadeira";
+            case "montadora" -> "Montadora"; case "escudo" -> "Escudo Eletrico"; case "mineradora" -> "Mineradora";
+            case "ferro_industrial" -> "Ferro Industrial"; case "triturado" -> "Minerio Triturado"; default -> type;
         };
     }
 
@@ -209,6 +267,11 @@ final class Engineer implements Listener {
     // ---------- colocar / quebrar ----------
 
     private Device at(Block b) { return devices.get(b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ()); }
+
+    private long countType(UUID owner, String world, String type) {
+        String base = BabylonClasses.baseOf(world);
+        return devices.values().stream().filter(d -> d.owner.equals(owner) && d.type.equals(type) && BabylonClasses.baseOf(d.world).equals(base)).count();
+    }
 
     private long count(UUID owner, String world, boolean turrets) {
         String base = BabylonClasses.baseOf(world);
@@ -228,12 +291,18 @@ final class Engineer implements Listener {
             invalidate();
             return;
         }
-        if (type.equals("cano") || type.startsWith("bala")) { e.setCancelled(true); return; }
+        if (type.equals("cano") || type.startsWith("bala") || type.equals("ferro_industrial") || type.equals("triturado")) { e.setCancelled(true); return; }
         Block b = e.getBlockPlaced();
         int lvl = plugin.level(p.getUniqueId());
         if (type.equals("torre") && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
             e.setCancelled(true);
             p.sendMessage(Component.text("Limite de " + MAX_TURRETS[lvl - 1] + " torres no nivel " + lvl + ".", NamedTextColor.RED));
+            return;
+        }
+        int maxOf = type.equals("escudo") ? (lvl >= 5 ? 2 : 1) : type.equals("mineradora") ? 1 : -1;
+        if (maxOf > 0 && countType(p.getUniqueId(), b.getWorld().getName(), type) >= maxOf) {
+            e.setCancelled(true);
+            p.sendMessage(Component.text("Limite de " + maxOf + " " + label(type) + " no nivel " + lvl + ".", NamedTextColor.RED));
             return;
         }
         Device d = new Device(type, b.getWorld().getName(), b.getX(), b.getY(), b.getZ(), p.getUniqueId());
@@ -249,6 +318,7 @@ final class Engineer implements Listener {
         p.sendMessage(Component.text("⚙ " + label(type) + " instalado.", NamedTextColor.GOLD));
         if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e ligue com cabo num gerador ou bateria.", NamedTextColor.GRAY));
         if (type.equals("solar")) p.sendMessage(Component.text("Painel solar gera CC: ligue um Inversor na mesma rede.", NamedTextColor.GRAY));
+        if (MACHINES.contains(type)) p.sendMessage(Component.text("Ligue com cabo numa rede com energia. Clique nela para ver o menu.", NamedTextColor.GRAY));
     }
 
     /** Remove o dispositivo: derruba o conteudo, o item customizado e vira ar. */
@@ -363,7 +433,7 @@ final class Engineer implements Listener {
                 e.setCancelled(true);
                 openBench(p);
             }
-            case "bateria", "geotermico", "solar", "carvao", "inversor", "forja" -> {
+            case "bateria", "geotermico", "solar", "carvao", "inversor", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora" -> {
                 ItemStack hand = p.getInventory().getItemInMainHand();
                 if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return;
                 e.setCancelled(true);
@@ -382,17 +452,66 @@ final class Engineer implements Listener {
     // ---------- bancada (menu) ----------
 
     static final class BenchMenu implements InventoryHolder {
-        Inventory inv;
+        Inventory inv; int tab; final Map<Integer, String> slots = new HashMap<>();
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private void openBench(Player p) {
+    private static final int[] CAT_SLOTS = {19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
+    private static final Material[] TAB_ICON = {Material.SHIELD, Material.LIGHTNING_ROD, Material.PISTON};
+    private static final String[] TAB_DESC = {"Torres, canos, escudo e municao.", "Geradores, baterias e cabos.", "Forja, fornalha, triturador e mais."};
+
+    private void openBench(Player p) { openCatalog(p, 0); }
+
+    /** Catalogo da bancada separado em abas (Defesa, Energia, Maquinas). */
+    void openCatalog(Player p, int tab) {
         BenchMenu h = new BenchMenu();
-        Inventory inv = Bukkit.createInventory(h, 27, Component.text("Bancada de Engenharia"));
+        h.tab = tab;
+        Inventory inv = Bukkit.createInventory(h, 54, Component.text("Engenharia: " + TABS[tab]));
         h.inv = inv;
-        int slot = 10;
-        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Clique para montar"));
+        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
+        for (int i = 0; i < 54; i++) inv.setItem(i, filler);
+        for (int t = 0; t < TABS.length; t++) {
+            boolean sel = t == tab;
+            ItemStack ic = icon(TAB_ICON[t], TABS[t], sel ? NamedTextColor.GREEN : NamedTextColor.GRAY, TAB_DESC[t], "", sel ? "Aba aberta" : "Clique para abrir");
+            if (sel) { ItemMeta m = ic.getItemMeta(); m.setEnchantmentGlintOverride(true); ic.setItemMeta(m); }
+            inv.setItem(2 + t * 2, ic);
+        }
+        ItemStack line = icon(sel(tab), " ", NamedTextColor.GRAY);
+        for (int i = 9; i < 18; i++) inv.setItem(i, line);
+        int k = 0;
+        for (Recipe r : recipes) {
+            if (tabOf(r.type()) != tab || k >= CAT_SLOTS.length) continue;
+            inv.setItem(CAT_SLOTS[k], recipeIcon(p, r, "Clique: ver craft  |  Shift: montar"));
+            h.slots.put(CAT_SLOTS[k++], r.type());
+        }
+        // produtos que nao saem da bancada
+        List<String[]> extra = new ArrayList<>();
+        if (tab == 0) { extra.add(new String[]{"bala_cobre", "Feita na Forja: 9 pepitas de cobre."}); extra.add(new String[]{"bala_ferro", "Feita na Forja: 9 pepitas de ferro."}); }
+        if (tab == 2) { extra.add(new String[]{"ferro_industrial", "Feito na Forja: 1 bloco de ferro (" + INDUSTRIAL_TIME + "s)."}); }
+        for (String[] ex : extra) {
+            if (k >= CAT_SLOTS.length) break;
+            ItemStack it = item(ex[0]);
+            ItemMeta m = it.getItemMeta();
+            List<Component> l = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
+            l.add(Component.empty());
+            l.add(Component.text(ex[1], NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            m.lore(l); it.setItemMeta(m);
+            inv.setItem(CAT_SLOTS[k++], it);
+        }
+        if (tab == 2) {
+            ItemStack tri = crushed(Material.RAW_IRON, 1);
+            ItemMeta m = tri.getItemMeta();
+            m.lore(List.of(Component.text("Sai do Triturador: minerio bruto", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("rende " + (int) (CRUSH_BONUS * 100) + "% a mais em media.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+            tri.setItemMeta(m);
+            if (k < CAT_SLOTS.length) inv.setItem(CAT_SLOTS[k], tri);
+        }
+        inv.setItem(49, icon(Material.ARROW, "Painel da Engenharia", NamedTextColor.WHITE, "Nivel, energia e informacoes."));
         p.openInventory(inv);
+    }
+
+    private static Material sel(int tab) {
+        return switch (tab) { case 0 -> Material.RED_STAINED_GLASS_PANE; case 1 -> Material.YELLOW_STAINED_GLASS_PANE; default -> Material.LIGHT_BLUE_STAINED_GLASS_PANE; };
     }
 
     private ItemStack recipeIcon(Player p, Recipe r, String action) {
@@ -405,6 +524,10 @@ final class Engineer implements Listener {
         for (Map.Entry<Material, Integer> c : r.cost().entrySet()) {
             boolean has = countMat(p, c.getKey()) >= c.getValue();
             lore.add(Component.text(" " + c.getValue() + "x " + pretty(c.getKey()), has ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        }
+        for (Map.Entry<String, Integer> c : r.parts().entrySet()) {
+            boolean has = countPart(p, c.getKey()) >= c.getValue();
+            lore.add(Component.text(" " + c.getValue() + "x " + label(c.getKey()), has ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
         }
         if (lvl < r.minLevel()) lore.add(Component.text("Requer nivel " + r.minLevel(), NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
         else lore.add(Component.text(action, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
@@ -450,8 +573,10 @@ final class Engineer implements Listener {
         inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
                 "Receita na mesa de trabalho:", "  _ R _", "  I M I", "  I I I",
                 "R = redstone, I = ferro, M = mesa de trabalho", "", "Clique para ver o craft."));
-        int slot = 11;
-        for (Recipe r : recipes) inv.setItem(slot++, recipeIcon(p, r, "Clique para ver o craft"));
+        for (int t = 0; t < TABS.length; t++) {
+            int n = 0; for (Recipe r : recipes) if (tabOf(r.type()) == t) n++;
+            inv.setItem(12 + t, icon(TAB_ICON[t], TABS[t], NamedTextColor.YELLOW, TAB_DESC[t], n + " receitas", "", "Clique para abrir."));
+        }
 
         Material[] mats = {Material.COPPER_INGOT, Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.NETHERITE_INGOT};
         for (int i = 0; i < 5; i++) {
@@ -464,8 +589,9 @@ final class Engineer implements Listener {
             lore.add("+ Alcance " + RANGE[i] + " blocos");
             lore.add("+ " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[i]) + " tiros por segundo");
             if (L == 2) lore.add("+ Libera Geotermico, Bateria e Forja");
-            if (L == 3) lore.add("+ Flecha de fogo (30%)");
-            if (L == 5) lore.add("+ Tiro duplo");
+            if (L == 3) { lore.add("+ Flecha de fogo (30%)"); lore.add("+ Fornalha Eletrica, Triturador, Plantadeira"); }
+            if (L == 4) lore.add("+ Montadora e Escudo Eletrico");
+            if (L == 5) { lore.add("+ Tiro duplo"); lore.add("+ Mineradora, 2 escudos"); }
             lore.add("");
             lore.add(got ? "Liberado" : "Bloqueado");
             inv.setItem(29 + i, icon(got ? mats[i] : Material.BLACK_STAINED_GLASS_PANE, "Nivel " + L, got ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY, lore.toArray(new String[0])));
@@ -508,7 +634,7 @@ final class Engineer implements Listener {
         if (raw == 45) plugin.openHub(p);
         else if (raw == 8) { plugin.toggleFx(p); openPanel(p); }
         else if (raw == 10) openRecipe(p, "bancada");
-        else if (raw >= 11 && raw < 11 + recipes.size()) openRecipe(p, recipes.get(raw - 11).type());
+        else if (raw >= 12 && raw < 12 + TABS.length) openCatalog(p, raw - 12);
     }
 
     // ---------- tela de craft de um item ----------
@@ -563,6 +689,17 @@ final class Engineer implements Listener {
             Recipe r = recipe(type);
             int i = 0;
             for (Map.Entry<Material, Integer> c : r.cost().entrySet()) inv.setItem(GRID[i++], ingredient(p, c.getKey(), c.getValue()));
+            for (Map.Entry<String, Integer> c : r.parts().entrySet()) {
+                int has = countPart(p, c.getKey());
+                ItemStack it = item(c.getKey());
+                it.setAmount(Math.max(1, Math.min(c.getValue(), 64)));
+                ItemMeta meta = it.getItemMeta();
+                meta.displayName(Component.text(c.getValue() + "x " + label(c.getKey()), has >= c.getValue() ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+                meta.lore(List.of(Component.text("Voce tem " + has, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                        Component.text("Feito na Forja (bloco de ferro).", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+                it.setItemMeta(meta);
+                inv.setItem(GRID[i++], it);
+            }
             boolean lvlOk = plugin.level(p.getUniqueId()) >= r.minLevel();
             boolean near = nearBench(p);
             List<String> lore = new ArrayList<>();
@@ -574,7 +711,7 @@ final class Engineer implements Listener {
         }
         ItemStack res = item(type); Recipe rr = recipe(type); if (rr != null) res.setAmount(rr.amount());
         inv.setItem(25, res);
-        inv.setItem(36, icon(Material.ARROW, "Voltar", NamedTextColor.WHITE, "Volta para o painel da classe."));
+        inv.setItem(36, icon(Material.ARROW, "Voltar", NamedTextColor.WHITE, type.equals("bancada") ? "Volta para o painel da classe." : "Volta para a aba " + TABS[tabOf(type)] + "."));
         p.openInventory(inv);
     }
 
@@ -583,7 +720,7 @@ final class Engineer implements Listener {
         if (!(e.getInventory().getHolder() instanceof RecipeView h)) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
-        if (e.getRawSlot() == 36) { openPanel(p); return; }
+        if (e.getRawSlot() == 36) { if (h.type.equals("bancada")) openPanel(p); else openCatalog(p, tabOf(h.type)); return; }
         if (e.getRawSlot() != 23 || h.type.equals("bancada")) return;
         if (!nearBench(p)) { p.sendMessage(Component.text("Chegue perto de uma Bancada de Engenharia.", NamedTextColor.RED)); return; }
         if (craft(p, recipe(h.type))) openRecipe(p, h.type);
@@ -598,6 +735,12 @@ final class Engineer implements Listener {
     private static String pretty(Material m) {
         String s = m.name().toLowerCase(Locale.ROOT).replace('_', ' ');
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private int countPart(Player p, String type) {
+        int n = 0;
+        for (ItemStack it : p.getInventory().getStorageContents()) if (it != null && type.equals(typeOf(it))) n += it.getAmount();
+        return n;
     }
 
     private int countMat(Player p, Material m) {
@@ -622,12 +765,18 @@ final class Engineer implements Listener {
 
     @EventHandler
     public void onBenchClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof BenchMenu)) return;
+        if (!(e.getInventory().getHolder() instanceof BenchMenu h)) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
-        int idx = e.getRawSlot() - 10;
-        if (idx < 0 || idx >= recipes.size()) return;
-        if (craft(p, recipes.get(idx))) openBench(p);
+        int raw = e.getRawSlot();
+        if (raw == 2 || raw == 4 || raw == 6) { p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f); openCatalog(p, (raw - 2) / 2); return; }
+        if (raw == 49) { openPanel(p); return; }
+        String type = h.slots.get(raw);
+        if (type == null) return;
+        if (e.isShiftClick()) {
+            if (!nearBench(p)) { p.sendMessage(Component.text("Chegue perto de uma Bancada de Engenharia.", NamedTextColor.RED)); return; }
+            if (craft(p, recipe(type))) openCatalog(p, h.tab);
+        } else openRecipe(p, type);
     }
 
     private boolean craft(Player p, Recipe r) {
@@ -638,7 +787,15 @@ final class Engineer implements Listener {
                 p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
                 return false;
             }
+        for (Map.Entry<String, Integer> c : r.parts().entrySet())
+            if (countPart(p, c.getKey()) < c.getValue()) {
+                p.sendMessage(Component.text("Falta " + label(c.getKey()) + " (feito na Forja).", NamedTextColor.RED));
+                p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
+                return false;
+            }
         for (Map.Entry<Material, Integer> c : r.cost().entrySet()) takeMat(p, c.getKey(), c.getValue());
+        for (Map.Entry<String, Integer> c : r.parts().entrySet())
+            takeIn(List.of(p.getInventory()), isPart(c.getKey()), c.getValue());
         ItemStack out = item(r.type()); out.setAmount(r.amount());
         for (ItemStack left : p.getInventory().addItem(out).values()) p.getWorld().dropItemNaturally(p.getLocation(), left);
         p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1f);
@@ -688,7 +845,9 @@ final class Engineer implements Listener {
         Material want = switch (d.type) {
             case "bancada" -> Material.SMITHING_TABLE; case "torre" -> Material.DISPENSER; case "carvao" -> Material.FURNACE;
             case "geotermico" -> Material.MAGMA_BLOCK; case "solar" -> Material.DAYLIGHT_DETECTOR; case "inversor" -> Material.WAXED_COPPER_BULB;
-            case "forja" -> Material.BLAST_FURNACE;
+            case "forja" -> Material.BLAST_FURNACE; case "fornalha" -> Material.SMOKER; case "triturador" -> Material.DROPPER;
+            case "plantadeira" -> Material.BARREL; case "montadora" -> Material.CRAFTER; case "escudo" -> Material.LIGHTNING_ROD;
+            case "mineradora" -> Material.HOPPER;
             default -> Material.LODESTONE;
         };
         return b.getType() == want;
@@ -1050,7 +1209,7 @@ final class Engineer implements Listener {
         }
         // torres ligadas pagam manutencao todo segundo; sem pagar, ficam desligadas
         powerTicks++;
-        for (Device f : devices.values()) if (f.type.equals("forja")) tickForge(f);
+        for (Device f : devices.values()) if (MACHINES.contains(f.type)) tickMachine(f);
         for (Device t : devices.values()) {
             if (!t.type.equals("torre")) continue;
             World w = Bukkit.getWorld(t.world);
@@ -1073,45 +1232,359 @@ final class Engineer implements Listener {
         updateTags();
     }
 
-    /** Pepita vanilla que a forja aceita e a bala que sai dela. */
-    private String forgeOutput(ItemStack in) {
-        if (in == null || typeOf(in) != null || in.getAmount() < FORGE_IN) return null;
-        return in.getType() == Material.IRON_NUGGET ? "bala_ferro" : in.getType() == Material.COPPER_NUGGET ? "bala_cobre" : null;
+    // ---------- maquinas ----------
+
+    private final Random rnd = new Random();
+
+    /** Gasta energia da rede para trabalhar este segundo; false = sem energia. */
+    private boolean work(Device d, double rate) {
+        if (!drain(d, rate, powerTicks % 3 == 0)) { d.status = "sem energia"; return false; }
+        d.lastRate = rate;
+        d.status = "";
+        return true;
     }
 
-    private void tickForge(Device f) {
-        f.lastRate = 0;
-        World w = Bukkit.getWorld(f.world);
-        if (!f.enabled || !loaded(f, w)) return;
-        Block b = w.getBlockAt(f.x, f.y, f.z);
-        if (!valid(f, b) || !(b.getState() instanceof org.bukkit.block.Furnace fu)) return;
-        org.bukkit.inventory.FurnaceInventory inv = fu.getInventory();
-        String out = forgeOutput(inv.getSmelting());
-        ItemStack res = inv.getResult();
-        boolean room = out != null && (res == null || res.getType() == Material.AIR
-                || (out.equals(typeOf(res)) && res.getAmount() + FORGE_OUT <= res.getMaxStackSize()));
-        if (!room) { f.burn = 0; return; }
-        if (!drain(f, FORGE_RATE, powerTicks % 3 == 0)) return; // sem energia: pausa, mantem o progresso
-        f.lastRate = FORGE_RATE;
-        f.burn++;
-        Location c = f.center(w);
-        if (fu.getBurnTime() < 30) { fu.setBurnTime((short) 40); fu.update(true, false); }
-        w.spawnParticle(Particle.LAVA, c.clone().add(0, 0.6, 0), 1, 0.2, 0.1, 0.2, 0);
-        if (f.burn < FORGE_TIME) { w.playSound(c, Sound.BLOCK_BLASTFURNACE_FIRE_CRACKLE, 0.6f, 1f); return; }
+    private static void keepLit(Block b) {
+        if (b.getState() instanceof org.bukkit.block.Furnace f && f.getBurnTime() < 30) { f.setBurnTime((short) 40); f.update(true, false); }
+    }
+
+    private static Inventory containerAt(Block b) { return b.getState() instanceof Container c ? c.getInventory() : null; }
+
+    /** Cabe o item inteiro no inventario? */
+    private static boolean fits(Inventory inv, ItemStack it) {
+        int left = it.getAmount();
+        for (ItemStack s : inv.getStorageContents()) {
+            if (s == null || s.getType().isAir()) left -= it.getMaxStackSize();
+            else if (s.isSimilar(it)) left -= s.getMaxStackSize() - s.getAmount();
+            if (left <= 0) return true;
+        }
+        return false;
+    }
+
+    private static boolean resultFits(ItemStack res, ItemStack out) {
+        return res == null || res.getType().isAir() || (res.isSimilar(out) && res.getAmount() + out.getAmount() <= res.getMaxStackSize());
+    }
+
+    private void tickMachine(Device d) {
+        d.lastRate = 0;
+        World w = Bukkit.getWorld(d.world);
+        if (!loaded(d, w)) return;
+        Block b = w.getBlockAt(d.x, d.y, d.z);
+        if (!valid(d, b)) return;
+        if (!d.enabled) { d.status = "desligada"; d.powered = false; return; }
+        switch (d.type) {
+            case "forja" -> tickForge(d, b);
+            case "fornalha" -> tickSmelter(d, b);
+            case "triturador" -> tickCrusher(d, b);
+            case "plantadeira" -> tickPlanter(d, b);
+            case "montadora" -> tickAssembler(d, b);
+            case "mineradora" -> tickMiner(d, b);
+            case "escudo" -> { d.powered = work(d, SHIELD_UPKEEP); }
+            default -> { }
+        }
+    }
+
+    /** O que a forja faz com a entrada: {saida, quantidade de entrada, quantidade de saida, tempo, energia/s}. */
+    private Object[] forgeSpec(ItemStack in) {
+        if (in == null || typeOf(in) != null) return null;
+        return switch (in.getType()) {
+            case IRON_NUGGET -> in.getAmount() >= FORGE_IN ? new Object[]{"bala_ferro", FORGE_IN, FORGE_OUT, FORGE_TIME, FORGE_RATE} : null;
+            case COPPER_NUGGET -> in.getAmount() >= FORGE_IN ? new Object[]{"bala_cobre", FORGE_IN, FORGE_OUT, FORGE_TIME, FORGE_RATE} : null;
+            case IRON_BLOCK -> new Object[]{"ferro_industrial", 1, 1, INDUSTRIAL_TIME, INDUSTRIAL_RATE};
+            default -> null;
+        };
+    }
+
+    private void tickForge(Device f, Block b) {
+        if (!(b.getState() instanceof org.bukkit.block.Furnace fu)) return;
+        FurnaceInventory inv = fu.getInventory();
+        Object[] spec = forgeSpec(inv.getSmelting());
+        if (spec == null) { f.burn = 0; f.status = "sem pepitas/ferro"; return; }
+        ItemStack out = item((String) spec[0]); out.setAmount((Integer) spec[2]);
+        if (!resultFits(inv.getResult(), out)) { f.status = "saida cheia"; return; }
+        if (!work(f, (Double) spec[4])) return;
+        keepLit(b);
+        Location c = f.center(b.getWorld());
+        b.getWorld().spawnParticle(Particle.LAVA, c.clone().add(0, 0.6, 0), 1, 0.2, 0.1, 0.2, 0);
+        if (++f.burn < (Integer) spec[3]) { b.getWorld().playSound(c, Sound.BLOCK_BLASTFURNACE_FIRE_CRACKLE, 0.6f, 1f); return; }
         f.burn = 0;
-        // re-le o estado depois do update para nao perder itens colocados por funil
-        if (!(b.getState() instanceof org.bukkit.block.Furnace fresh)) return;
-        inv = fresh.getInventory();
+        inv = ((org.bukkit.block.Furnace) b.getState()).getInventory();
         ItemStack in = inv.getSmelting();
-        if (!out.equals(forgeOutput(in))) return;
-        in.setAmount(in.getAmount() - FORGE_IN);
+        Object[] again = forgeSpec(in);
+        if (again == null || !again[0].equals(spec[0])) return;
+        in.setAmount(in.getAmount() - (Integer) spec[1]);
         inv.setSmelting(in.getAmount() > 0 ? in : null);
         ItemStack r = inv.getResult();
-        if (r == null || r.getType() == Material.AIR) { r = item(out); r.setAmount(FORGE_OUT); }
-        else r.setAmount(r.getAmount() + FORGE_OUT);
+        if (r == null || r.getType().isAir()) r = out; else r.setAmount(r.getAmount() + out.getAmount());
         inv.setResult(r);
-        w.playSound(c, Sound.BLOCK_ANVIL_USE, 0.5f, 1.4f);
-        w.spawnParticle(Particle.FLAME, c.clone().add(0, 0.6, 0), 8, 0.2, 0.2, 0.2, 0.02);
+        b.getWorld().playSound(c, Sound.BLOCK_ANVIL_USE, 0.5f, 1.4f);
+        b.getWorld().spawnParticle(Particle.FLAME, c.clone().add(0, 0.6, 0), 8, 0.2, 0.2, 0.2, 0.02);
+    }
+
+    private List<CookingRecipe<?>> furnaceRecipes;
+    private final Map<Material, ItemStack> smeltCache = new EnumMap<>(Material.class);
+
+    /** Resultado da fornalha comum para este item (ou null). Triturado conta como o bruto. */
+    private ItemStack smeltResult(ItemStack in) {
+        if (in == null || in.getType().isAir()) return null;
+        String t = typeOf(in);
+        if (t != null && !t.equals("triturado")) return null;
+        if (furnaceRecipes == null) {
+            furnaceRecipes = new ArrayList<>();
+            Iterator<org.bukkit.inventory.Recipe> ri = Bukkit.recipeIterator();
+            while (ri.hasNext()) if (ri.next() instanceof FurnaceRecipe fr) furnaceRecipes.add(fr);
+        }
+        if (smeltCache.containsKey(in.getType())) { ItemStack c = smeltCache.get(in.getType()); return c == null ? null : c.clone(); }
+        ItemStack plain = new ItemStack(in.getType());
+        ItemStack found = null;
+        for (CookingRecipe<?> r : furnaceRecipes) if (r.getInputChoice().test(plain)) { found = r.getResult(); break; }
+        smeltCache.put(in.getType(), found);
+        return found == null ? null : found.clone();
+    }
+
+    private void tickSmelter(Device f, Block b) {
+        if (!(b.getState() instanceof org.bukkit.block.Furnace fu)) return;
+        FurnaceInventory inv = fu.getInventory();
+        ItemStack out = smeltResult(inv.getSmelting());
+        if (out == null) { f.burn = 0; f.status = "sem item"; return; }
+        if (!resultFits(inv.getResult(), out)) { f.status = "saida cheia"; return; }
+        if (!work(f, SMELT_RATE)) return;
+        keepLit(b);
+        if (++f.burn < SMELT_TIME) return;
+        f.burn = 0;
+        inv = ((org.bukkit.block.Furnace) b.getState()).getInventory();
+        ItemStack in = inv.getSmelting();
+        ItemStack again = smeltResult(in);
+        if (again == null || !again.isSimilar(out)) return;
+        in.setAmount(in.getAmount() - 1);
+        inv.setSmelting(in.getAmount() > 0 ? in : null);
+        ItemStack r = inv.getResult();
+        if (r == null || r.getType().isAir()) r = out; else r.setAmount(r.getAmount() + out.getAmount());
+        inv.setResult(r);
+        b.getWorld().playSound(f.center(b.getWorld()), Sound.BLOCK_FURNACE_FIRE_CRACKLE, 0.6f, 1.3f);
+    }
+
+    /** O que o triturador faz: {material de saida, quantidade base, triturado?}. */
+    private static Object[] crushSpec(ItemStack in) {
+        if (in == null) return null;
+        return switch (in.getType()) {
+            case RAW_IRON, IRON_ORE, DEEPSLATE_IRON_ORE -> new Object[]{Material.RAW_IRON, 1, true};
+            case RAW_GOLD, GOLD_ORE, DEEPSLATE_GOLD_ORE -> new Object[]{Material.RAW_GOLD, 1, true};
+            case RAW_COPPER -> new Object[]{Material.RAW_COPPER, 1, true};
+            case COPPER_ORE, DEEPSLATE_COPPER_ORE -> new Object[]{Material.RAW_COPPER, 3, true};
+            case COBBLESTONE -> new Object[]{Material.GRAVEL, 1, false};
+            case GRAVEL -> new Object[]{Material.SAND, 1, false};
+            default -> null;
+        };
+    }
+
+    private boolean crushable(ItemStack it) { return it != null && typeOf(it) == null && crushSpec(it) != null; }
+
+    private void tickCrusher(Device f, Block b) {
+        Inventory own = containerAt(b);
+        if (own == null) return;
+        int slot = -1;
+        for (int i = 0; i < own.getSize(); i++) if (crushable(own.getItem(i))) { slot = i; break; }
+        if (slot < 0) { f.burn = 0; f.status = "sem minerio"; return; }
+        Object[] spec = crushSpec(own.getItem(slot));
+        Inventory below = containerAt(b.getRelative(BlockFace.DOWN));
+        Inventory dest = below != null ? below : own;
+        int max = (Integer) spec[1] + 1;
+        ItemStack probe = (Boolean) spec[2] ? crushed((Material) spec[0], max) : new ItemStack((Material) spec[0], max);
+        if (!fits(dest, probe)) { f.status = "saida cheia"; return; }
+        if (!work(f, CRUSH_RATE)) return;
+        Location c = f.center(b.getWorld());
+        if (++f.burn < CRUSH_TIME) { b.getWorld().playSound(c, Sound.BLOCK_GRINDSTONE_USE, 0.4f, 0.8f); return; }
+        f.burn = 0;
+        ItemStack in = own.getItem(slot);
+        if (!crushable(in)) return;
+        in.setAmount(in.getAmount() - 1);
+        own.setItem(slot, in.getAmount() > 0 ? in : null);
+        int n = (Integer) spec[1] + ((Boolean) spec[2] && rnd.nextDouble() < CRUSH_BONUS ? 1 : 0);
+        ItemStack out = (Boolean) spec[2] ? crushed((Material) spec[0], n) : new ItemStack((Material) spec[0], n);
+        for (ItemStack left : dest.addItem(out).values()) b.getWorld().dropItemNaturally(c.clone().add(0, 0.6, 0), left);
+        b.getWorld().spawnParticle(Particle.BLOCK, c.clone().add(0, 0.6, 0), 10, 0.2, 0.1, 0.2, Material.STONE.createBlockData());
+    }
+
+    /** O triturador so deixa o funil puxar o que ja foi triturado. */
+    @EventHandler(ignoreCancelled = true)
+    public void onHopperPull(org.bukkit.event.inventory.InventoryMoveItemEvent e) {
+        Location l = e.getSource().getLocation();
+        if (l == null || e.getSource().getType() != org.bukkit.event.inventory.InventoryType.DROPPER) return;
+        Device d = at(l.getBlock());
+        if (d != null && d.type.equals("triturador") && crushable(e.getItem())) e.setCancelled(true);
+    }
+
+    private static Material cropFor(Material seed) {
+        return switch (seed) {
+            case WHEAT_SEEDS -> Material.WHEAT; case BEETROOT_SEEDS -> Material.BEETROOTS; case CARROT -> Material.CARROTS;
+            case POTATO -> Material.POTATOES; case MELON_SEEDS -> Material.MELON_STEM; case PUMPKIN_SEEDS -> Material.PUMPKIN_STEM;
+            case TORCHFLOWER_SEEDS -> Material.TORCHFLOWER_CROP; case NETHER_WART -> Material.NETHER_WART;
+            default -> null;
+        };
+    }
+
+    private void tickPlanter(Device f, Block b) {
+        if (powerTicks % 2 != 0) { if (f.status.isEmpty()) f.lastRate = PLANT_COST; return; }
+        Inventory own = containerAt(b);
+        if (own == null) return;
+        boolean hasSeed = false, hasWart = false;
+        for (ItemStack it : own.getContents()) {
+            if (it == null || typeOf(it) != null || cropFor(it.getType()) == null) continue;
+            if (it.getType() == Material.NETHER_WART) hasWart = true; else hasSeed = true;
+        }
+        if (!hasSeed && !hasWart) { f.status = "sem sementes"; return; }
+        int r = Math.min(6, 4 + Math.max(0, plugin.level(f.owner) - 3));
+        int planted = 0;
+        World w = b.getWorld();
+        outer:
+        for (int dy = -1; dy <= 0; dy++)
+            for (int dx = -r; dx <= r; dx++)
+                for (int dz = -r; dz <= r; dz++) {
+                    Block soil = w.getBlockAt(f.x + dx, f.y + dy, f.z + dz);
+                    Block top = soil.getRelative(BlockFace.UP);
+                    if (!top.getType().isAir()) continue;
+                    boolean farm = soil.getType() == Material.FARMLAND, soul = soil.getType() == Material.SOUL_SAND;
+                    if (!(farm && hasSeed) && !(soul && hasWart)) continue;
+                    int slot = -1;
+                    for (int i = 0; i < own.getSize(); i++) {
+                        ItemStack it = own.getItem(i);
+                        if (it == null || typeOf(it) != null || cropFor(it.getType()) == null) continue;
+                        if ((it.getType() == Material.NETHER_WART) == soul) { slot = i; break; }
+                    }
+                    if (slot < 0) continue;
+                    if (!drain(f, PLANT_COST, false)) { f.status = "sem energia"; break outer; }
+                    ItemStack seed = own.getItem(slot);
+                    top.setType(cropFor(seed.getType()));
+                    seed.setAmount(seed.getAmount() - 1);
+                    own.setItem(slot, seed.getAmount() > 0 ? seed : null);
+                    w.playSound(top.getLocation(), Sound.ITEM_CROP_PLANT, 0.6f, 1f);
+                    w.spawnParticle(Particle.HAPPY_VILLAGER, top.getLocation().add(0.5, 0.3, 0.5), 3, 0.2, 0.1, 0.2, 0);
+                    f.lastRate = PLANT_COST; f.status = "";
+                    if (++planted >= 2) break outer;
+                }
+        if (planted == 0 && f.status.isEmpty()) f.status = "tudo plantado";
+    }
+
+    /** Receitas que a montadora pode fazer: tudo da bancada que o dono ja tem nivel. */
+    List<String> assemblable(UUID owner) {
+        int lvl = plugin.level(owner);
+        List<String> out = new ArrayList<>();
+        for (Recipe r : recipes) if (r.minLevel() <= lvl) out.add(r.type());
+        return out;
+    }
+
+    private static int countIn(List<Inventory> invs, java.util.function.Predicate<ItemStack> ok) {
+        int n = 0;
+        for (Inventory inv : invs) for (ItemStack it : inv.getContents()) if (it != null && ok.test(it)) n += it.getAmount();
+        return n;
+    }
+
+    private static void takeIn(List<Inventory> invs, java.util.function.Predicate<ItemStack> ok, int amount) {
+        for (Inventory inv : invs)
+            for (int i = 0; i < inv.getSize() && amount > 0; i++) {
+                ItemStack it = inv.getItem(i);
+                if (it == null || !ok.test(it)) continue;
+                int t = Math.min(amount, it.getAmount());
+                it.setAmount(it.getAmount() - t);
+                inv.setItem(i, it.getAmount() > 0 ? it : null);
+                amount -= t;
+            }
+    }
+
+    private java.util.function.Predicate<ItemStack> isMat(Material m) { return it -> it.getType() == m && typeOf(it) == null; }
+    private java.util.function.Predicate<ItemStack> isPart(String type) { return it -> type.equals(typeOf(it)); }
+
+    private void tickAssembler(Device f, Block b) {
+        Recipe r = recipe(f.sel);
+        if (r == null || plugin.level(f.owner) < r.minLevel()) { f.status = "receita bloqueada"; return; }
+        Inventory own = containerAt(b), up = containerAt(b.getRelative(BlockFace.UP)), down = containerAt(b.getRelative(BlockFace.DOWN));
+        if (own == null) return;
+        if (down == null) { f.status = "sem bau embaixo"; return; }
+        List<Inventory> src = up != null ? List.of(own, up) : List.of(own);
+        for (Map.Entry<Material, Integer> c : r.cost().entrySet())
+            if (countIn(src, isMat(c.getKey())) < c.getValue()) { f.burn = 0; f.status = "falta " + pretty(c.getKey()).toLowerCase(Locale.ROOT); return; }
+        for (Map.Entry<String, Integer> c : r.parts().entrySet())
+            if (countIn(src, isPart(c.getKey())) < c.getValue()) { f.burn = 0; f.status = "falta " + label(c.getKey()).toLowerCase(Locale.ROOT); return; }
+        ItemStack out = item(r.type()); out.setAmount(r.amount());
+        if (!fits(down, out)) { f.status = "saida cheia"; return; }
+        if (!work(f, ASSEMBLE_RATE)) return;
+        if (++f.burn < ASSEMBLE_TIME) return;
+        f.burn = 0;
+        for (Map.Entry<Material, Integer> c : r.cost().entrySet()) takeIn(src, isMat(c.getKey()), c.getValue());
+        for (Map.Entry<String, Integer> c : r.parts().entrySet()) takeIn(src, isPart(c.getKey()), c.getValue());
+        down.addItem(out);
+        b.getWorld().playSound(f.center(b.getWorld()), Sound.BLOCK_CRAFTER_CRAFT, 0.8f, 1f);
+    }
+
+    /** Montadora nao faz craft vanilla com redstone. */
+    @EventHandler(ignoreCancelled = true)
+    public void onCrafter(CrafterCraftEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
+
+    private boolean mineSkip(Block t) {
+        Material m = t.getType();
+        if (m.isAir() || t.isLiquid() || m == Material.BEDROCK || m == Material.SPAWNER || m == Material.END_PORTAL_FRAME
+                || m == Material.REINFORCED_DEEPSLATE || m == Material.END_PORTAL || m == Material.NETHER_PORTAL || m.getHardness() < 0) return true;
+        if (t.getState() instanceof Container) return true;
+        String k = key(t.getWorld().getName(), t.getX(), t.getY(), t.getZ());
+        return devices.containsKey(k) || cables.contains(k) || poleBlocks.containsKey(k);
+    }
+
+    private void tickMiner(Device f, Block b) {
+        World w = b.getWorld();
+        int side = MINE_R * 2 + 1, per = side * side;
+        int bottom = w.getMinHeight() + 1;
+        if (f.y - 1 - f.cursor / per < bottom) { f.status = "concluida"; return; }
+        if (++f.burn < MINE_TIME) { if (f.burn > 0) f.lastRate = 0.01; return; }
+        Inventory own = containerAt(b);
+        if (own == null) return;
+        // pula ar e blocos protegidos sem gastar tempo (ate 64 por segundo)
+        for (int step = 0; step < 64; step++) {
+            int layer = f.cursor / per, idx = f.cursor % per;
+            int y = f.y - 1 - layer;
+            if (y < bottom) { f.status = "concluida"; return; }
+            int x = f.x - MINE_R + idx % side, z = f.z - MINE_R + idx / side;
+            if (!w.isChunkLoaded(x >> 4, z >> 4)) { f.status = "area descarregada"; return; }
+            Block t = w.getBlockAt(x, y, z);
+            if (mineSkip(t)) { f.cursor++; continue; }
+            Collection<ItemStack> drops = t.getDrops(new ItemStack(Material.DIAMOND_PICKAXE));
+            for (ItemStack d : drops) if (!fits(own, d)) { f.status = "cheia"; return; }
+            if (!drain(f, MINE_COST, true)) { f.status = "sem energia"; return; }
+            f.burn = 0;
+            w.spawnParticle(Particle.BLOCK, t.getLocation().add(0.5, 0.5, 0.5), 12, 0.3, 0.3, 0.3, t.getBlockData());
+            w.playSound(t.getLocation(), t.getBlockData().getSoundGroup().getBreakSound(), 0.7f, 0.9f);
+            t.setType(Material.AIR);
+            for (ItemStack d : drops) own.addItem(d);
+            f.cursor++;
+            f.lastRate = MINE_COST / MINE_TIME; f.status = "";
+            return;
+        }
+    }
+
+    /** Escudo: empurra mobs hostis com descarga. Roda a cada 10 ticks. */
+    private void tickShields() {
+        for (Device d : devices.values()) {
+            if (!d.type.equals("escudo") || !d.enabled || !d.powered) continue;
+            World w = Bukkit.getWorld(d.world);
+            if (!loaded(d, w)) continue;
+            Location c = d.center(w);
+            double r = plugin.level(d.owner) >= 5 ? 6 : 5;
+            int pushed = 0;
+            for (Entity en : w.getNearbyEntities(c, r, r, r)) {
+                if (!(en instanceof LivingEntity le) || !hostile(le) || le.getLocation().distanceSquared(c) > r * r) continue;
+                if (!drain(d, SHIELD_PUSH, false)) { d.status = "sem energia"; return; }
+                Vector away = le.getLocation().toVector().subtract(c.toVector()).setY(0);
+                if (away.lengthSquared() < 0.01) away = new Vector(1, 0, 0);
+                le.setVelocity(away.normalize().multiply(0.9).setY(0.35));
+                le.damage(1.0);
+                Location top = c.clone().add(0, 0.6, 0);
+                Vector line = le.getLocation().add(0, le.getHeight() * 0.5, 0).toVector().subtract(top.toVector());
+                for (double t = 0; t < 1; t += 0.12)
+                    w.spawnParticle(Particle.ELECTRIC_SPARK, top.clone().add(line.clone().multiply(t)), 1, 0.05, 0.05, 0.05, 0);
+                w.playSound(le.getLocation(), Sound.BLOCK_COPPER_BULB_TURN_ON, 0.6f, 1.8f);
+                if (++pushed >= 6) break;
+            }
+        }
     }
 
     /** Fontes que podem pagar um tiro: geradores CA primeiro, depois baterias que fornecem. */
@@ -1177,6 +1650,13 @@ final class Engineer implements Listener {
         if (d.isSource()) info.add("Energia: " + (int) d.energy + "/" + (int) d.cap());
         if (!d.type.equals("bateria") && !d.type.equals("forja")) info.add(String.format(Locale.ROOT, "Gerando: %.1f/s", d.lastRate));
         if (d.type.equals("carvao")) info.add("Queimando: " + d.burn + "s");
+        if (MACHINES.contains(d.type) && !d.type.equals("forja")) {
+            info.clear();
+            info.add(d.lastRate > 0 || (d.type.equals("escudo") && d.powered) ? "Trabalhando" : "Parada: " + (d.status.isEmpty() ? "-" : d.status));
+            info.add("Energia na rede: " + (int) networkEnergy(d, w));
+            if (d.type.equals("montadora")) info.add("Fazendo: " + label(d.sel));
+            if (d.type.equals("mineradora")) info.add("Camada atual: y=" + (d.y - 1 - d.cursor / ((MINE_R * 2 + 1) * (MINE_R * 2 + 1))));
+        }
         if (d.type.equals("forja")) { info.clear(); info.add(d.lastRate > 0 ? "Forjando: " + d.burn + "/" + FORGE_TIME + "s" : "Parada"); info.add("Consome " + (int) FORGE_RATE + "/s trabalhando"); info.add("Energia na rede: " + (int) networkEnergy(d, w)); }
         if (d.type.equals("solar") && n.count("inversor") == 0) info.add("SEM INVERSOR: energia parada");
         if (d.type.equals("inversor")) info.add("Paineis na rede: " + n.count("solar"));
@@ -1189,7 +1669,22 @@ final class Engineer implements Listener {
         if (d.type.equals("carvao"))
             inv.setItem(12, icon(Material.COAL, "Combustivel", NamedTextColor.WHITE, "Abre a fornalha para colocar", "carvao, bloco de carvao, vara", "de blaze ou bloco de alga seca."));
         if (d.type.equals("forja"))
-            inv.setItem(12, icon(Material.IRON_NUGGET, "Abrir forja", NamedTextColor.WHITE, "Pepitas de ferro ou cobre em cima,", "balas saem no resultado.", "9 pepitas = " + FORGE_OUT + " balas."));
+            inv.setItem(12, icon(Material.IRON_NUGGET, "Abrir forja", NamedTextColor.WHITE, "Em cima: pepitas ou bloco de ferro.", "9 pepitas = " + FORGE_OUT + " balas (" + FORGE_TIME + "s).", "Bloco de ferro = Ferro Industrial (" + INDUSTRIAL_TIME + "s, " + (int) INDUSTRIAL_RATE + "/s)."));
+        if (List.of("fornalha", "triturador", "plantadeira", "montadora", "mineradora").contains(d.type))
+            inv.setItem(12, icon(Material.CHEST, "Abrir inventario", NamedTextColor.WHITE, "Itens da maquina."));
+        if (d.type.equals("montadora")) {
+            Recipe r = recipe(d.sel);
+            List<String> l = new ArrayList<>();
+            if (r != null) {
+                for (Map.Entry<Material, Integer> c : r.cost().entrySet()) l.add(c.getValue() + "x " + pretty(c.getKey()));
+                for (Map.Entry<String, Integer> c : r.parts().entrySet()) l.add(c.getValue() + "x " + label(c.getKey()));
+            }
+            l.add(""); l.add("Clique: proxima receita"); l.add("Direito: anterior");
+            ItemStack ic = icon(item(d.sel) == null ? Material.BARRIER : item(d.sel).getType(), "Receita: " + label(d.sel), NamedTextColor.YELLOW, l.toArray(new String[0]));
+            inv.setItem(13, ic);
+        }
+        if (d.type.equals("mineradora"))
+            inv.setItem(13, icon(Material.IRON_PICKAXE, "Recomecar do topo", NamedTextColor.YELLOW, "Volta a escavar da camada", "logo abaixo da mineradora."));
         if (d.type.equals("bateria"))
             inv.setItem(12, icon(Material.COMPARATOR, "Modo: " + BAT_MODES[d.mode], NamedTextColor.YELLOW,
                     "Carrega e fornece: normal.", "So carrega: guarda para depois.", "So fornece: nao aceita carga.", "", "Clique para trocar."));
@@ -1220,7 +1715,17 @@ final class Engineer implements Listener {
             case 10 -> d.enabled = !d.enabled;
             case 12 -> {
                 if (d.type.equals("bateria")) d.mode = (d.mode + 1) % BAT_MODES.length;
-                else if ((d.type.equals("carvao") || d.type.equals("forja")) && w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) { p.openInventory(c.getInventory()); return; }
+                else if ((d.type.equals("carvao") || (MACHINES.contains(d.type) && !d.type.equals("escudo"))) && w != null && w.getBlockAt(d.x, d.y, d.z).getState() instanceof Container c) { p.openInventory(c.getInventory()); return; }
+                else return;
+            }
+            case 13 -> {
+                if (d.type.equals("montadora")) {
+                    List<String> opts = assemblable(d.owner);
+                    if (opts.isEmpty()) return;
+                    int i = opts.indexOf(d.sel);
+                    i = e.isRightClick() ? (i <= 0 ? opts.size() - 1 : i - 1) : (i + 1) % opts.size();
+                    d.sel = opts.get(i); d.burn = 0;
+                } else if (d.type.equals("mineradora")) { d.cursor = 0; d.burn = 0; p.sendMessage(Component.text("Mineradora volta a escavar do topo.", NamedTextColor.YELLOW)); }
                 else return;
             }
             case 14 -> d.tagOn = !d.tagOn;
@@ -1269,6 +1774,7 @@ final class Engineer implements Listener {
 
     private void tickTurrets() {
         tick += 5;
+        if (tick % 10 == 0) tickShields();
         for (Iterator<Device> it = devices.values().iterator(); it.hasNext(); ) {
             Device t = it.next();
             if (!t.type.equals("torre") || !t.enabled || !t.powered || t.barrel <= 0 || t.nextShot > tick) continue;
@@ -1486,6 +1992,17 @@ final class Engineer implements Listener {
         NamedTextColor g = NamedTextColor.GRAY;
         switch (d.type) {
             case "bancada" -> { return name; }
+            case "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora" -> {
+                boolean on = d.lastRate > 0 || (d.type.equals("escudo") && d.powered);
+                Component st = !d.enabled ? Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD)
+                        : on ? Component.text("trabalhando", NamedTextColor.GREEN)
+                        : Component.text(d.status.isEmpty() ? "parada" : d.status, NamedTextColor.RED);
+                Component out = name.append(nl).append(st);
+                if (d.type.equals("montadora")) out = out.append(nl).append(Component.text("fazendo: " + label(d.sel), g));
+                if (d.type.equals("mineradora")) out = out.append(nl).append(Component.text("y=" + (d.y - 1 - d.cursor / ((MINE_R * 2 + 1) * (MINE_R * 2 + 1))), g));
+                if (net(d).devs.size() <= 1) out = out.append(nl).append(Component.text("sem cabo", NamedTextColor.RED));
+                return out;
+            }
             case "torre" -> {
                 int lvl = plugin.level(d.owner);
                 int[] am = ammo(b);
@@ -1786,6 +2303,8 @@ final class Engineer implements Listener {
                 d.prio = c.getInt("prio");
                 d.ammoPref = c.getInt("ammo");
                 d.barrel = c.getInt("barrel", BARREL_MAX);
+                d.cursor = c.getInt("cursor");
+                d.sel = c.getString("sel", "cabo");
                 devices.put(d.key(), d);
             } catch (Exception ex) { plugin.getLogger().warning("device " + k + ": " + ex.getMessage()); }
         }
@@ -1802,6 +2321,8 @@ final class Engineer implements Listener {
             y.set(k + ".energy", Math.round(d.energy * 10) / 10.0);
             y.set(k + ".burn", d.burn);
             y.set(k + ".tag", d.tagOn); y.set(k + ".on", d.enabled); y.set(k + ".mode", d.mode);
+            if (d.type.equals("mineradora")) y.set(k + ".cursor", d.cursor);
+            if (d.type.equals("montadora")) y.set(k + ".sel", d.sel);
             if (d.type.equals("torre")) {
                 y.set(k + ".filter", d.filter);
                 y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);
