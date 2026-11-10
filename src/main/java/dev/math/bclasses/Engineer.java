@@ -56,11 +56,16 @@ final class Engineer implements Listener {
     /** Tiros que um cano aguenta (bola de fogo gasta 2). */
     static final int BARREL_MAX = 300;
     static final int XP_CRAFT = 3, XP_REPAIR = 5, XP_KILL = 1;
-    /** Forja: energia por segundo enquanto trabalha, segundos por lote (9 pepitas viram 8 balas). */
+    /** Forja: energia por segundo enquanto trabalha, segundos por lote (9 pepitas viram 16 balas). */
     static final double FORGE_RATE = 4;
-    static final int FORGE_TIME = 6, FORGE_IN = 9, FORGE_OUT = 8;
-    /** Balas: dano fixo (sobe 0.5 por nivel), energia por tiro e desgaste do cano. Flecha faz ~6. */
-    static final double COPPER_DMG = 5, IRON_DMG = 7.5, COPPER_COST = 4, IRON_COST = 7;
+    static final int FORGE_TIME = 6, FORGE_IN = 9, FORGE_OUT = 16;
+    /**
+     * Balas: rajada de BURST balas por disparo (3x a cadencia da flecha), cada uma com pouco dano.
+     * Flecha da ~6: cobre 1/3 disso (2), ferro metade (3). Energia por bala; cano gasta 1 (cobre)
+     * ou 2 (ferro) por rajada.
+     */
+    static final int BURST = 3;
+    static final double COPPER_DMG = 2, IRON_DMG = 3, COPPER_COST = 2, IRON_COST = 3;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
@@ -160,8 +165,8 @@ final class Engineer implements Listener {
             case "cabo" -> { mat = Material.WAXED_COPPER_CHAIN; name = "Cabo de Energia"; lore = List.of("Liga maquinas encostadas nele.", "Uma alavanca no meio do cabo", "funciona como disjuntor.", "Energizado da choque em quem encostar."); }
             case "cano" -> { mat = Material.IRON_BARS; name = "Cano da Torre"; lore = List.of("Peca de reposicao da Torre Sentinela.", "Aguenta " + BARREL_MAX + " tiros (bola de fogo conta 2).", "Troque pelo menu da torre."); }
             case "forja" -> { mat = Material.BLAST_FURNACE; name = "Forja de Municao"; lore = List.of("Transforma pepitas em balas para a torre.", "9 pepitas de ferro ou cobre = " + FORGE_OUT + " balas.", "Gasta " + (int) FORGE_RATE + " energia/s, " + FORGE_TIME + "s por lote.", "Funil em cima abastece, embaixo retira."); }
-            case "bala_ferro" -> { mat = Material.IRON_NUGGET; name = "Bala de Ferro"; lore = List.of("Municao da Torre Sentinela.", "Tiro reto, " + IRON_DMG + " de dano.", "Gasta " + (int) IRON_COST + " energia e 2 de cano."); }
-            case "bala_cobre" -> { mat = Material.COPPER_NUGGET; name = "Bala de Cobre"; lore = List.of("Municao da Torre Sentinela.", "Tiro reto, " + COPPER_DMG + " de dano.", "Gasta " + (int) COPPER_COST + " energia e 1 de cano."); }
+            case "bala_ferro" -> { mat = Material.IRON_NUGGET; name = "Bala de Ferro"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", IRON_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) IRON_COST + " energia por bala", "e 2 de cano por rajada."); }
+            case "bala_cobre" -> { mat = Material.COPPER_NUGGET; name = "Bala de Cobre"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", COPPER_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) COPPER_COST + " energia por bala", "e 1 de cano por rajada."); }
             case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
@@ -478,7 +483,7 @@ final class Engineer implements Listener {
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
         inv.setItem(50, icon(Material.ARROW, "Municao", NamedTextColor.WHITE,
                 "Flechas, bolas de fogo ou balas dentro", "da torre, ou abasteca com funil.", "Bola de fogo gasta " + (int) FIREBALL_COST + " de energia.",
-                "Balas saem da Forja (nivel 2): tiro reto,", "cobre " + COPPER_DMG + " de dano, ferro " + IRON_DMG + ".",
+                "Balas saem da Forja (nivel 2): rajada de", BURST + " tiros retos, cobre " + COPPER_DMG + " e ferro " + IRON_DMG + " cada.",
                 "Aceita flecha com efeito e espectral.", "Nunca acerta jogador, pet ou animal."));
         boolean fxOn = plugin.fxEnabled(p);
         inv.setItem(8, icon(fxOn ? Material.GLOWSTONE_DUST : Material.GUNPOWDER, "Particulas de energia: " + (fxOn ? "ligadas" : "desligadas"),
@@ -1320,15 +1325,16 @@ final class Engineer implements Listener {
                 break;
             }
             if (best == null) continue;
-            double cost = fireball ? FIREBALL_COST : bullet == null ? SHOT_COST : iron ? IRON_COST : COPPER_COST;
+            int shots = lvl >= 5 ? 2 : 1;
+            int use = bullet != null ? Math.min(BURST * shots, ammo.getAmount()) : 1;
+            double cost = fireball ? FIREBALL_COST : bullet == null ? SHOT_COST : use * (iron ? IRON_COST : COPPER_COST);
             if (!drain(t, cost)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); continue; }
 
             ItemStack shot = ammo.clone(); shot.setAmount(1);
-            ammo.setAmount(ammo.getAmount() - 1);
+            ammo.setAmount(ammo.getAmount() - use);
             cont.getInventory().setItem(slot, ammo.getAmount() > 0 ? ammo : null);
 
-            int shots = lvl >= 5 ? 2 : 1;
-            t.barrel = Math.max(0, t.barrel - shots * (fireball || iron ? 2 : 1));
+            t.barrel = Math.max(0, t.barrel - shots * (fireball || iron ? 2 : 1)); // bala: por rajada
             if (t.barrel == 0) {
                 w.playSound(c, Sound.ENTITY_ITEM_BREAK, 1f, 0.7f);
                 w.spawnParticle(Particle.LARGE_SMOKE, c.clone().add(0, 0.6, 0), 10, 0.2, 0.2, 0.2, 0.02);
@@ -1339,10 +1345,18 @@ final class Engineer implements Listener {
                 for (int s = 0; s < shots; s++) fireball(w, c, bestAim, t, s == 0 ? 0 : 0.08);
                 w.playSound(c, Sound.ITEM_FIRECHARGE_USE, 0.7f, 1.2f);
             } else if (bullet != null) {
-                double dmg = (iron ? IRON_DMG : COPPER_DMG) + 0.5 * (lvl - 1);
-                for (int s = 0; s < shots; s++) bullet(w, c, bestAim, t, shot, dmg, s == 0 ? 0 : 0.05);
-                w.playSound(c, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.6f, iron ? 1.6f : 1.9f);
-                w.spawnParticle(Particle.SMOKE, c.clone().add(bestAim.clone().subtract(c.toVector()).normalize().multiply(0.9)), 3, 0.05, 0.05, 0.05, 0.01);
+                double dmg = (iron ? IRON_DMG : COPPER_DMG) + 0.25 * (lvl - 1);
+                LivingEntity target = best;
+                for (int s = 0; s < use; s++) {
+                    double jit = s == 0 ? 0 : 0.04;
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (!target.isValid()) return;
+                        Vector aim = aimPoint(target, c, 3.5, false);
+                        bullet(w, c, aim, t, shot, dmg, jit);
+                        w.playSound(c, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.5f, iron ? 1.6f : 1.9f);
+                        w.spawnParticle(Particle.SMOKE, c.clone().add(aim.clone().subtract(c.toVector()).normalize().multiply(0.9)), 2, 0.05, 0.05, 0.05, 0.01);
+                    }, s * 2L);
+                }
             } else {
                 for (int s = 0; s < shots; s++) fire(w, c, bestAim, shot, t, lvl, s == 0 ? 0.4f : 2.5f);
                 w.playSound(c, Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.4f);

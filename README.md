@@ -32,15 +32,16 @@ Receita na mesa de trabalho: mesa de trabalho no centro, 5 ferros embaixo e dos 
 ### Dispositivos
 
 - **Torre Sentinela** (dispenser): atira flechas (normais, com efeito, espectrais), bolas de fogo ou balas guardadas nela em mobs hostis. Mira na frente do alvo e compensa a queda da flecha. Nunca acerta jogador, pet ou animal. Menu com municao preferida, prioridade de alvo, filtro de mobs, liga/desliga e alcance.
-  - Consome energia ligada mesmo parada (2.0/s, sobe com o nivel) e mais por tiro (5 flecha, 10 bola de fogo, 4 bala de cobre, 7 bala de ferro).
-  - **Cano**: aguenta 300 tiros (bola de fogo e bala de ferro contam 2). Gasto, a torre para. Troque pelo menu da torre com um Cano da Torre. O desgaste fica salvo no item se a torre for quebrada.
+  - Consome energia ligada mesmo parada (2.0/s, sobe com o nivel) e mais por tiro (5 flecha, 10 bola de fogo, 2 por bala de cobre, 3 por bala de ferro).
+  - **Cano**: aguenta 300 tiros (bola de fogo e rajada de ferro contam 2, rajada de cobre conta 1). Gasto, a torre para. Troque pelo menu da torre com um Cano da Torre. O desgaste fica salvo no item se a torre for quebrada.
 - **Gerador a Carvao** (fornalha): 4 energia/s enquanto queima.
 - **Gerador Geotermico** (bloco de magma): 0.5/s por fonte de lava encostada, dobro no Nether.
 - **Painel Solar** (sensor de luz): 1.5/s de dia com ceu aberto. Gera corrente continua: precisa de um **Inversor CC/CA** na rede (ate 8/s, 90% de eficiencia).
 - **Bateria** (magnetita): guarda ate 5000. Modos: carrega e fornece, so carrega, so fornece.
-- **Forja de Municao** (alto-forno, nivel 2): 9 pepitas de ferro ou cobre viram 8 balas em 6 segundos, gastando 4 energia/s da rede. Funil em cima abastece, funil embaixo retira. Nao derrete minerio.
-  - **Bala de Cobre**: tiro reto e rapido, 5 de dano (+0.5 por nivel), 4 de energia, 1 de cano.
-  - **Bala de Ferro**: tiro reto e rapido, 7.5 de dano (+0.5 por nivel), 7 de energia, 2 de cano.
+- **Forja de Municao** (alto-forno, nivel 2): 9 pepitas de ferro ou cobre viram 16 balas em 6 segundos, gastando 4 energia/s da rede. Funil em cima abastece, funil embaixo retira. Nao derrete minerio.
+  - Balas saem em rajada de 3 tiros retos (3x a cadencia da flecha), com pouco dano cada. Uma flecha da cerca de 6.
+  - **Bala de Cobre**: 2 de dano por bala (+0.25 por nivel), 2 de energia por bala, 1 de cano por rajada.
+  - **Bala de Ferro**: 3 de dano por bala (+0.25 por nivel), 3 de energia por bala, 2 de cano por rajada.
 
 ### Rede eletrica
 
