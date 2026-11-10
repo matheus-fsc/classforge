@@ -61,7 +61,7 @@ final class Engineer implements Listener {
         final String type; final String world; final int x, y, z; final UUID owner;
         double energy, lastRate; int burn; long nextShot; boolean powered; int barrel = BARREL_MAX;
         TextDisplay tag;
-        boolean tagOn = true, enabled = true; int filter = 0b111111; int prio; int ammoPref; int mode;
+        boolean tagOn = true, enabled = true; int filter = 0b1111111; int prio; int ammoPref; int mode;
         Device(String type, String world, int x, int y, int z, UUID owner) {
             this.type = type; this.world = world; this.x = x; this.y = y; this.z = z; this.owner = owner;
         }
@@ -1477,15 +1477,16 @@ final class Engineer implements Listener {
 
     // ---------- menu da torre ----------
 
-    static final String[] CATS = {"Zumbis", "Esqueletos", "Creepers", "Aranhas", "Mobs do Nether", "Outros"};
+    static final String[] CATS = {"Zumbis", "Esqueletos", "Creepers", "Aranhas", "Mobs do Nether", "Outros", "Aldeoes zumbis"};
     static final Material[] CAT_ICON = {Material.ZOMBIE_HEAD, Material.SKELETON_SKULL, Material.CREEPER_HEAD,
-            Material.SPIDER_EYE, Material.BLAZE_POWDER, Material.PHANTOM_MEMBRANE};
+            Material.SPIDER_EYE, Material.BLAZE_POWDER, Material.PHANTOM_MEMBRANE, Material.ZOMBIE_VILLAGER_SPAWN_EGG};
     static final String[] PRIOS = {"Mais perto", "Menos vida", "Mais vida"};
     static final String[] AMMOS = {"Qualquer", "Flechas", "Bolas de fogo"};
 
     static int category(LivingEntity e) {
         if (e instanceof PigZombie || e instanceof PiglinAbstract || e instanceof Blaze || e instanceof Ghast
                 || e instanceof MagmaCube || e instanceof Hoglin || e instanceof Zoglin) return 4;
+        if (e instanceof ZombieVillager) return 6;
         if (e instanceof Zombie) return 0;
         if (e instanceof AbstractSkeleton) return 1;
         if (e instanceof Creeper) return 2;
@@ -1530,7 +1531,7 @@ final class Engineer implements Listener {
                 d.tagOn ? NamedTextColor.GREEN : NamedTextColor.GRAY, "Texto flutuante com municao", "e energia em cima da torre.", "", "Clique para " + (d.tagOn ? "desligar" : "ligar") + "."));
         for (int i = 0; i < CATS.length; i++) {
             boolean on = (d.filter & (1 << i)) != 0;
-            inv.setItem(28 + i + (i >= 3 ? 1 : 0), icon(on ? CAT_ICON[i] : Material.BARRIER, CATS[i] + ": " + (on ? "atirando" : "ignorando"),
+            inv.setItem(28 + i, icon(on ? CAT_ICON[i] : Material.BARRIER, CATS[i] + ": " + (on ? "atirando" : "ignorando"),
                     on ? NamedTextColor.GREEN : NamedTextColor.RED, "Clique para " + (on ? "ignorar" : "atirar") + "."));
         }
         int pct = 100 * d.barrel / BARREL_MAX;
@@ -1580,8 +1581,7 @@ final class Engineer implements Listener {
             case 42 -> { p.closeInventory(); showNet(p, d); return; }
             default -> {
                 int i = raw - 28;
-                if (i >= 4) i--; // slot 31 e o espaco do meio
-                if (raw == 31 || i < 0 || i >= CATS.length) return;
+                if (i < 0 || i >= CATS.length) return;
                 d.filter ^= 1 << i;
             }
         }
@@ -1659,7 +1659,7 @@ final class Engineer implements Listener {
                 d.tagOn = c.getBoolean("tag", true);
                 d.enabled = c.getBoolean("on", true);
                 d.mode = c.getInt("mode");
-                d.filter = c.getInt("filter", 0b111111);
+                d.filter = c.getInt("filter", 0b1111111);
                 d.prio = c.getInt("prio");
                 d.ammoPref = c.getInt("ammo");
                 d.barrel = c.getInt("barrel", BARREL_MAX);
