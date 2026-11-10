@@ -2213,12 +2213,28 @@ final class Engineer implements Listener {
                         : Component.text("ligado ao inversor", NamedTextColor.AQUA));
     }
 
+    static final String TAG_MARK = "bc_device_tag";
+    private int sweepTick;
+
+    /** Apaga etiquetas orfas (dispositivo removido, chunk recarregado, referencia perdida). */
+    private void sweepTags() {
+        Set<UUID> live = new HashSet<>();
+        for (Device d : devices.values()) if (d.tag != null) live.add(d.tag.getUniqueId());
+        for (World w : Bukkit.getWorlds())
+            for (TextDisplay td : w.getEntitiesByClass(TextDisplay.class)) {
+                boolean ours = td.getScoreboardTags().contains(TAG_MARK)
+                        || (!td.isPersistent() && td.getViewRange() == TAG_RANGE); // etiquetas antigas sem marca
+                if (ours && !live.contains(td.getUniqueId())) td.remove();
+            }
+    }
+
     private void updateTags() {
+        if (++sweepTick % 10 == 0) sweepTags();
         Set<Device> followers = new HashSet<>();
         Map<Device, List<Device>> clusters = solarClusters(followers);
         for (Device d : devices.values()) {
             World w = Bukkit.getWorld(d.world);
-            if (!loaded(d, w)) { d.tag = null; continue; }
+            if (!loaded(d, w)) { removeTag(d); continue; }
             if (followers.contains(d) || !d.tagOn) { removeTag(d); continue; }
             Block b = w.getBlockAt(d.x, d.y, d.z);
             Location at = new Location(w, d.x + 0.5, d.y + 1.55, d.z + 0.5);
@@ -2234,6 +2250,7 @@ final class Engineer implements Listener {
                 Component tx = text;
                 d.tag = w.spawn(at, TextDisplay.class, td -> {
                     td.setPersistent(false);
+                    td.addScoreboardTag(TAG_MARK);
                     td.setBillboard(Display.Billboard.CENTER);
                     td.setShadowed(true);
                     td.setViewRange(TAG_RANGE); // so aparece de perto (~6 blocos)
