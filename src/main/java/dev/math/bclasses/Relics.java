@@ -54,6 +54,14 @@ final class Relics implements Listener {
             new Relic("replantio", "Replantio", 1, "enxada", new String[]{"Colher plantacao madura replanta", "sozinho, usando uma semente", "do proprio drop."}),
             new Relic("decapitacao", "Decapitacao", 3, "espada ou machado", new String[]{"Chance de dropar a cabeca", "de quem voce mata: 4 / 8 / 12%."}),
             new Relic("protecao", "Protecao Antiga", 3, "armadura", new String[]{"Cada nivel nas pecas vestidas da 4%", "de chance de cortar o golpe pela", "metade (maximo 24%)."}),
+            new Relic("lenhador", "Lenhador", 1, "machado", new String[]{"Agachado, derruba o tronco inteiro", "da arvore (ate 48 blocos).", "Gasta durabilidade por bloco."}),
+            new Relic("colheita", "Colheita", 1, "enxada", new String[]{"Colher plantacao madura colhe", "tambem as maduras em volta (3x3)."}),
+            new Relic("arado", "Arado", 1, "enxada", new String[]{"Arar a terra ara 3x3 de uma vez.", "Gasta durabilidade por bloco."}),
+            new Relic("sabedoria", "Sabedoria", 3, "picareta", new String[]{"Minerios dao mais XP:", "+50% / +100% / +150%."}),
+            new Relic("visao", "Visao Noturna", 1, "capacete", new String[]{"Visao noturna enquanto veste."}),
+            new Relic("sereia", "Sereia", 1, "capacete", new String[]{"Respira debaixo d'agua enquanto veste."}),
+            new Relic("molas", "Molas", 2, "botas", new String[]{"Pulo um pouco maior enquanto veste:", "pulo I / pulo II."}),
+            new Relic("implantes", "Implantes", 1, "capacete", new String[]{"Andando, a fome enche aos poucos", "(1 ponto a cada 6 s)."}),
     };
     static final int[] VEIN = {0, 6, 12, 20};
 
@@ -67,6 +75,7 @@ final class Relics implements Listener {
         bookKey = new NamespacedKey(plugin, "relic_book");
         for (Relic r : RELICS) keys.put(r.id(), new NamespacedKey(plugin, "relic_" + r.id()));
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::wornTick, 40L, 40L);
     }
 
     static Relic relic(String id) { for (Relic r : RELICS) if (r.id().equals(id)) return r; return null; }
@@ -103,6 +112,11 @@ final class Relics implements Listener {
             case "replantio" -> Tag.ITEMS_HOES.isTagged(m);
             case "decapitacao" -> Tag.ITEMS_SWORDS.isTagged(m) || Tag.ITEMS_AXES.isTagged(m);
             case "protecao" -> n.endsWith("_HELMET") || n.endsWith("_CHESTPLATE") || n.endsWith("_LEGGINGS") || n.endsWith("_BOOTS");
+            case "lenhador" -> Tag.ITEMS_AXES.isTagged(m);
+            case "colheita", "arado" -> Tag.ITEMS_HOES.isTagged(m);
+            case "sabedoria" -> Tag.ITEMS_PICKAXES.isTagged(m);
+            case "visao", "sereia", "implantes" -> n.endsWith("_HELMET") || m == Material.TURTLE_HELMET;
+            case "molas" -> n.endsWith("_BOOTS");
             default -> false;
         };
     }
@@ -286,6 +300,128 @@ final class Relics implements Listener {
         }
         e.getDrops().add(h);
         k.playSound(k.getLocation(), Sound.ENTITY_ITEM_BREAK, 0.6f, 0.5f);
+    }
+
+    // ---------- Lenhador ----------
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onFell(BlockBreakEvent e) {
+        Player p = e.getPlayer();
+        if (veining.contains(p.getUniqueId()) || !p.isSneaking() || p.getGameMode() == GameMode.CREATIVE) return;
+        Material log = e.getBlock().getType();
+        if (!Tag.LOGS.isTagged(log) || level(p.getInventory().getItemInMainHand(), "lenhador") <= 0) return;
+        List<Block> tree = new ArrayList<>();
+        Deque<Block> q = new ArrayDeque<>(List.of(e.getBlock()));
+        Set<Block> seen = new HashSet<>(q);
+        while (!q.isEmpty() && tree.size() < 48) {
+            Block b = q.poll();
+            for (int dx = -1; dx <= 1; dx++) for (int dy = 0; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) {
+                Block n = b.getRelative(dx, dy, dz);
+                if (seen.add(n) && n.getType() == log) { q.add(n); tree.add(n); if (tree.size() >= 48) break; }
+            }
+        }
+        breakAll(p, tree, "lenhador", log);
+    }
+
+    /** Quebra os blocos como o jogador (eventos, drops e durabilidade), parando se a ferramenta quebrar. */
+    private void breakAll(Player p, List<Block> blocks, String relic, Material only) {
+        if (blocks.isEmpty()) return;
+        UUID id = p.getUniqueId();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            veining.add(id);
+            try {
+                for (Block b : blocks) {
+                    if (level(p.getInventory().getItemInMainHand(), relic) <= 0) break;
+                    if (only == null || b.getType() == only) p.breakBlock(b);
+                }
+            } finally { veining.remove(id); }
+        });
+    }
+
+    // ---------- Colheita ----------
+
+    private static boolean mature(Block b) {
+        return seedOf(b.getType()) != null && b.getBlockData() instanceof Ageable a && a.getAge() >= a.getMaximumAge();
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onHarvest(BlockBreakEvent e) {
+        Player p = e.getPlayer();
+        if (veining.contains(p.getUniqueId()) || !mature(e.getBlock())) return;
+        if (level(p.getInventory().getItemInMainHand(), "colheita") <= 0) return;
+        List<Block> around = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            Block n = e.getBlock().getRelative(dx, 0, dz);
+            if ((dx != 0 || dz != 0) && mature(n)) around.add(n);
+        }
+        breakAll(p, around, "colheita", null);
+    }
+
+    // ---------- Arado ----------
+
+    private static boolean tillable(Material m) { return m == Material.DIRT || m == Material.GRASS_BLOCK || m == Material.DIRT_PATH; }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onTill(org.bukkit.event.player.PlayerInteractEvent e) {
+        if (e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || e.getClickedBlock() == null
+                || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        Player p = e.getPlayer();
+        ItemStack hoe = p.getInventory().getItemInMainHand();
+        Block c = e.getClickedBlock();
+        if (level(hoe, "arado") <= 0 || !tillable(c.getType()) || !c.getRelative(BlockFace.UP).getType().isAir()) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (c.getType() != Material.FARMLAND) return; // o centro nao foi arado (protecao, etc.)
+            int done = 0;
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                Block n = c.getRelative(dx, 0, dz);
+                if ((dx == 0 && dz == 0) || !tillable(n.getType()) || !n.getRelative(BlockFace.UP).getType().isAir()) continue;
+                ItemStack t = p.getInventory().getItemInMainHand();
+                if (level(t, "arado") <= 0) break;
+                n.setType(Material.FARMLAND);
+                done++;
+                if (p.getGameMode() != GameMode.CREATIVE) p.getInventory().setItemInMainHand(t.damage(1, p));
+            }
+            if (done > 0) c.getWorld().playSound(c.getLocation(), Sound.ITEM_HOE_TILL, 1f, 0.9f);
+        });
+    }
+
+    // ---------- Sabedoria ----------
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
+    public void onOreXp(BlockBreakEvent e) {
+        int lvl = level(e.getPlayer().getInventory().getItemInMainHand(), "sabedoria");
+        if (lvl <= 0 || e.getExpToDrop() <= 0 || oreFamily(e.getBlock().getType()) == null) return;
+        e.setExpToDrop((int) Math.round(e.getExpToDrop() * (1 + 0.5 * lvl)));
+    }
+
+    // ---------- efeitos de vestir (visao, sereia, molas, implantes) ----------
+
+    private final Map<UUID, org.bukkit.Location> lastPos = new HashMap<>();
+    private final Map<UUID, Integer> walkTicks = new HashMap<>();
+
+    private void wornTick() {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.isDead()) continue;
+            ItemStack helm = p.getInventory().getHelmet(), boots = p.getInventory().getBoots();
+            if (level(helm, "visao") > 0) give(p, org.bukkit.potion.PotionEffectType.NIGHT_VISION, 0, 300);
+            if (level(helm, "sereia") > 0) give(p, org.bukkit.potion.PotionEffectType.WATER_BREATHING, 0, 80);
+            int mol = level(boots, "molas");
+            if (mol > 0) give(p, org.bukkit.potion.PotionEffectType.JUMP_BOOST, mol - 1, 80);
+            org.bukkit.Location now = p.getLocation(), was = lastPos.put(p.getUniqueId(), now);
+            if (level(helm, "implantes") > 0 && was != null && was.getWorld() == now.getWorld() && was.distanceSquared(now) > 1) {
+                int w = walkTicks.merge(p.getUniqueId(), 1, Integer::sum);
+                if (w >= 3) { // 3 x 2 s andando
+                    walkTicks.put(p.getUniqueId(), 0);
+                    if (p.getFoodLevel() < 20) p.setFoodLevel(p.getFoodLevel() + 1);
+                }
+            }
+        }
+    }
+
+    private static void give(Player p, org.bukkit.potion.PotionEffectType t, int amp, int ticks) {
+        org.bukkit.potion.PotionEffect cur = p.getPotionEffect(t);
+        if (cur != null && (cur.getAmplifier() > amp || (cur.getAmplifier() == amp && cur.getDuration() > ticks - 45))) return;
+        p.addPotionEffect(new org.bukkit.potion.PotionEffect(t, ticks, amp, true, false, true));
     }
 
     // ---------- Protecao Antiga ----------

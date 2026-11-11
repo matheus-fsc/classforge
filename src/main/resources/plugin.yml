@@ -1,5 +1,5 @@
 name: HardcoreRouletteClasses
-version: 0.10.0
+version: 0.10.1
 main: dev.math.bclasses.BabylonClasses
 api-version: "26.3"
 description: Habilidades por nivel (Engenharia, Exploracao, Plantacao) para o BABYLON FLAMES.
