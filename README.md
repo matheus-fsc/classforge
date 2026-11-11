@@ -7,8 +7,8 @@ Feito para **Paper 26.3** (Java 25). Mensagens em portugues (pt-BR). Pensado par
 ## Habilidades
 
 - **Engenharia** (pronta): torres de defesa, geracao de energia, cabos e postes.
-- **Exploracao** (em breve): XP por distancia percorrida, bonus de comida.
-- **Coleta** (em breve): farm e plantio automatizado.
+- **Exploracao** (pronta): XP por chunk novo, companheiro, Ancora de Perola, bonus de carne e de XP dos orbes (+4% por nivel, maximo 20%).
+- **Plantacao** (pronta): plantadores (golems de cobre) que plantam a partir de um bau, e colheita extra.
 
 `/classe` (ou `/engenharia`, `/habilidades`) abre o menu de habilidades.
 
@@ -32,6 +32,7 @@ XP (o painel mostra tudo no frasco de XP):
 - Craftar item mecanico (pistao, funil, trilho, observador, bigorna e afins): +2.
 - Consertar item na bigorna: +4. Trocar o cano de uma torre: +8. Abate de uma torre sua: +2.
 - Forja: +1 por lote. Fornalha eletrica e triturador: +1 a cada 4 itens. Montadora e mineradora nao dao XP.
+- Prensa, torno, bobinadeira, cadinho e gravadora: +1 a cada 2 lotes.
 
 ### Bancada de Engenharia
 Receita na mesa de trabalho: mesa de trabalho no centro, 5 ferros embaixo e dos lados, 1 redstone em cima. Clique com o direito nela para montar os dispositivos. No painel, clicar num item mostra o craft dele.
@@ -62,7 +63,44 @@ Todas gastam energia da rede enquanto trabalham e so processam o que voce coloca
 - **Escudo Eletrico** (para-raios, nivel 4): empurra mobs hostis num raio de 5 (nivel 5: 6) com descargas de 1 de dano. 3 energia/s ligado e 1 por mob. Limite de 1 (nivel 5: 2).
 - **Mineradora** (funil, nivel 5): escava uma area 5x5 embaixo dela, camada por camada, ate o fundo do mundo. 1 bloco a cada 3 s, 12 energia por bloco. Os itens caem no funil (aponte para um bau). Nao quebra baus, maquinas, cabos, liquidos nem bedrock. Limite de 1.
 
-A bancada e o painel separam as receitas em abas: Defesa, Energia e Maquinas. Na aba, clique para ver o craft ou shift-clique para montar direto.
+### Linha industrial (componentes)
+
+As maquinas avancadas nao saem mais so de Ferro/Cobre Industrial: pedem pecas que so existem saindo de uma maquina especifica.
+
+| Maquina (bloco) | Nivel | Energia | Entra | Sai |
+|---|---|---|---|---|
+| **Prensa Hidraulica** (pistao) | 2 | 6/s | 1 Ferro Industrial | 2 Chapa de Ferro (6 s) |
+| | 2 | | 1 Cobre Industrial | 2 Chapa de Cobre (6 s) |
+| | 3 | | 1 Aco | 2 Chapa de Aco (10 s) |
+| **Torno Mecanico** (cortador de pedra) | 2 | 4/s | 1 Cobre Industrial | 6 Fio de Cobre (5 s) |
+| | 2 | | 1 Chapa de Ferro | 2 Engrenagem (6 s) |
+| **Bobinadeira** (tear) | 3 | 5/s | 6 Fio de Cobre + 1 Chapa de Ferro | 2 Bobina de Cobre (8 s) |
+| **Cadinho de Liga** (caldeirao) | 3 | 8/s | 2 Ferro Industrial + 4 carvao | 2 Aco (15 s) |
+| | 3 | | 1 Cobre Industrial + 1 ouro + 4 redstone | 2 Liga Condutora (12 s) |
+| **Gravadora de Circuitos** (mesa de cartografia) | 3 | 6/s | 1 Chapa de Cobre + 2 redstone + 1 quartzo | 1 Circuito de Redstone (10 s) |
+| | 4 | | 2 Circuito + 1 Liga Condutora + 1 diamante | 1 Circuito Avancado (20 s) |
+
+O **Motor Eletrico** e montado na bancada (nivel 3): 1 bobina, 2 engrenagens, 1 chapa de ferro e 2 redstone.
+
+Quem usa o que: Fornalha Eletrica (chapa de ferro, bobina), Triturador (chapa, engrenagem, motor), Plantadeira (chapa, engrenagem, fio), Montadora (chapa de aco, motor, circuito), Escudo (chapa de aco, bobina, circuito), Mineradora (chapa de aco, motor, circuito avancado). Torre, cano, geradores, bateria, cabos e forja continuam so com Ferro/Cobre Industrial.
+
+**Interface propria**: clicar numa dessas maquinas abre a tela dela, que e o proprio inventario: 3 espacos de entrada, barra de progresso, 2 de saida, as receitas da maquina (com a que esta em producao brilhando), medidor de energia da rede e os botoes de ligar, etiqueta e mostrar rede. A entrada so aceita o que a maquina usa; a saida so deixa retirar. Varios jogadores podem abrir ao mesmo tempo.
+
+**Automacao**: bau em cima abastece (a maquina puxa so o que usa), bau embaixo recebe. Empilhar duas maquinas de processo faz a de cima entregar direto na entrada da de baixo (ex.: Prensa em cima do Torno = ferro industrial vira engrenagem).
+
+### Tuneladora (nivel 5)
+
+Abre um tunel reto 3x3, bem devagar, assentando trilho no chao e Cabo de Energia no teto (o cabo ja sai ligado na rede da estacao).
+
+- **Laminadora de Trilhos** (mesa de flechas, nivel 4, 5 energia/s): 4 lingotes de ferro + 2 madeiras (tabua ou tronco) = 16 trilhos em 8 s. Em cima da estacao, entrega os trilhos direto nela.
+- **Broca de Diamante** (bancada, nivel 4): 3 diamantes, 1 chapa de aco, 1 engrenagem. Aguenta 1800 blocos escavados.
+- **Estacao da Tuneladora** (observador, nivel 5, limite de 1): o tunel sai na direcao em que voce olha ao colocar. Guarda trilhos, cabos e brocas (bau em cima abastece) e recebe a carga (bau embaixo).
+- **Trem Tunelador** (nivel 5): carrinho de fornalha que vai na estacao. 1 bloco de tunel a cada 4 s, 10 energia/s enquanto escava, 1 trilho por bloco, 1 cabo por bloco se tiver. Tunel de ate 1024 blocos.
+- Broca gasta: o trem troca sozinho por uma reserva da estacao (10 s parado). Sem reserva, para.
+- Agua, lava, areia e cascalho em volta do tunel viram pedra (revestimento); buraco embaixo do trilho ganha piso. Bau, maquina, cabo, poste ou bedrock na frente: o trem para e avisa o dono.
+- **Modulo de Coleta** (nivel 5, upgrade da estacao): o trem guarda o que escava e manda um vagao-bau de volta (a cada 16 blocos ou com 27 pilhas), que descarrega na estacao. Sem o modulo, os itens caem no tunel.
+
+A bancada e o painel separam as receitas em abas: Defesa, Energia, Maquinas e Componentes. Na aba, clique para ver o craft ou shift-clique para montar direto.
 
 ### Rede eletrica
 
@@ -70,8 +108,31 @@ A bancada e o painel separam as receitas em abas: Defesa, Energia e Maquinas. Na
 - **Juncao** (bloco de cobre encerado): conduz como o cabo, serve para curvas e emendas.
 - **Alavanca** no meio do cabo funciona como disjuntor.
 - **Poste**: muro de pedregulho na base, 1 a 8 blocos de madeira e cobre talhado no topo. Liga com outros postes a ate 24 blocos sem fio (com fio visual em particulas). Para tirar energia do poste, encoste cabo ou juncao em qualquer parte dele.
-- Cabo energizado da choque: dano por segundo e lentidao II em quem encostar.
+- Cabo energizado da choque continuo (a cada meio segundo enquanto encostar) e lentidao II.
+  - Armadura de ferro, ouro, cobre ou malha conduz: +25% de dano por peca (2x com o conjunto todo). Diamante e netherita sao neutros.
+  - Bota de couro: metade do dano e sem lentidao.
+  - **Sola Isolante** (bancada, nivel 2: 2 couros, 4 algas secas, 1 chapa de cobre): modulo de armadura. No inventario, clique com ela em cima de qualquer bota; bota isolada nao leva choque.
 - Etiquetas flutuantes mostram energia, municao e estado de cada maquina. Particulas de energia correm pelos cabos ate as maquinas (`/classe particulas` liga e desliga).
+
+## Plantacao
+
+Nivel proprio (60, 200, 500 e 1000 XP). Sobe colhendo plantacao madura (+1 a cada 4) e com as sementes que os seus plantadores plantam (+1 a cada 10).
+
+| Nivel | Plantadores | Raio | 1 semente a cada | Colheita extra |
+|-------|-------------|------|------------------|----------------|
+| 1 | 1 | 4 | 4 s | 5% |
+| 2 | 2 | 5 | 3 s | 10% |
+| 3 | 2 | 6 | 3 s | 15% |
+| 4 | 3 | 7 | 2 s | 20% |
+| 5 | 4 | 8 | 1 s | 25% |
+
+- **Plantador de Cobre**: mesa de trabalho, abobora esculpida em cima, sementes / bloco de cobre / sementes no meio, enxada de ferro embaixo. Clique com ele num bau ou barril: nasce um golem de cobre preso a esse bau, que pega as sementes de dentro e planta na terra arada em volta (fungo do Nether na areia das almas). Agachado + clique no golem recolhe; se morrer, solta o item.
+- A colheita continua manual (da XP e colheita extra) ou por redstone com agua e funil.
+- A Plantadeira eletrica continua na Engenharia (nivel 3).
+
+## Exploracao
+
+Alem do companheiro, da Ancora de Perola e do bonus de carne: os orbes de XP rendem +4% por nivel (4, 8, 12, 16 e 20% no maximo), so no mundo da run.
 
 ## Comandos
 
@@ -95,6 +156,8 @@ O jar sai em `target/HardcoreRouletteClasses.jar`. Copie para `plugins/`.
 
 - `plugins/HardcoreRouletteClasses/players.yml`: XP e mundo de cada jogador.
 - `plugins/HardcoreRouletteClasses/devices.yml`: dispositivos, cabos e postes.
+- `plugins/HardcoreRouletteClasses/explorer.yml`: companheiros e ancoras.
+- `plugins/HardcoreRouletteClasses/farm.yml`: plantadores.
 
 ## Licenca
 

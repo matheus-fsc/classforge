@@ -36,17 +36,19 @@ import java.util.*;
 public final class BabylonClasses extends JavaPlugin implements Listener {
 
     public static final class PData {
-        String world; int xp, exp;
+        String world; int xp, exp, farm;
     }
 
     static final int[] LEVEL_XP = {0, 25, 75, 175, 350};
     static final int[] EXP_XP = {0, 150, 500, 1200, 2500};
+    static final int[] FARM_XP = {0, 60, 200, 500, 1000};
 
     private final Map<UUID, PData> players = new HashMap<>();
     private final Set<UUID> fxOff = new HashSet<>();
     private File playersFile;
     Engineer engineer;
     Explorer explorer;
+    Farmer farmer;
 
     @Override
     public void onEnable() {
@@ -57,6 +59,8 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         engineer.enable();
         explorer = new Explorer(this);
         explorer.enable();
+        farmer = new Farmer(this);
+        farmer.enable();
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getScheduler().runTaskTimer(this, this::savePlayers, 1200L, 1200L);
         for (Player p : Bukkit.getOnlinePlayers()) checkLife(p);
@@ -64,7 +68,8 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if (engineer != null) { engineer.save(); engineer.clearTags(); }
+        if (engineer != null) { engineer.save(); engineer.clearTags(); engineer.tunnel.clear(); }
+        if (farmer != null) farmer.save();
         if (explorer != null) explorer.save();
         savePlayers();
     }
@@ -112,6 +117,26 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         return levelFor(d == null ? 0 : d.exp, EXP_XP);
     }
 
+    /** Nivel de Plantacao (1 a 5). */
+    int farmLevel(UUID id) {
+        PData d = players.get(id);
+        return levelFor(d == null ? 0 : d.farm, FARM_XP);
+    }
+
+    void addFarm(UUID id, int amount) {
+        PData d = data(id);
+        Player p = Bukkit.getPlayer(id);
+        if (d.world == null && p != null && isRunWorld(p.getWorld())) d.world = baseOf(p.getWorld().getName());
+        int before = farmLevel(id);
+        d.farm += amount;
+        int after = farmLevel(id);
+        if (p != null && after > before) {
+            p.sendMessage(Component.text("✦ Plantacao subiu para o nivel " + after + "!", NamedTextColor.GREEN, TextDecoration.BOLD));
+            p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f);
+            p.sendMessage(Component.text(farmer.levelSummary(after), NamedTextColor.GRAY));
+        }
+    }
+
     void addExp(UUID id, int amount) {
         PData d = data(id);
         Player p = Bukkit.getPlayer(id);
@@ -153,6 +178,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
                 d.world = y.getString(k + ".world");
                 d.xp = y.getInt(k + ".xp");
                 d.exp = y.getInt(k + ".exp");
+                d.farm = y.getInt(k + ".farm");
                 players.put(UUID.fromString(k), d);
             } catch (Exception ignored) { }
         }
@@ -166,6 +192,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             y.set(k + ".world", d.world);
             y.set(k + ".xp", d.xp);
             y.set(k + ".exp", d.exp);
+            y.set(k + ".farm", d.farm);
         }
         y.set("fx-off", fxOff.stream().map(UUID::toString).toList());
         try { y.save(playersFile); } catch (IOException ex) { getLogger().warning("players.yml: " + ex.getMessage()); }
@@ -177,13 +204,15 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     void checkLife(Player p) {
         engineer.discover(p);
         explorer.discover(p);
+        farmer.discover(p);
         if (!isRunWorld(p.getWorld())) return;
         String base = baseOf(p.getWorld().getName());
         PData d = data(p.getUniqueId());
         if (d.world != null && !base.equals(d.world)) {
-            if (d.xp > 0 || d.exp > 0) p.sendMessage(Component.text("☠ Nova vida: suas habilidades voltaram ao nivel 1.", NamedTextColor.RED));
-            d.xp = 0; d.exp = 0;
+            if (d.xp > 0 || d.exp > 0 || d.farm > 0) p.sendMessage(Component.text("☠ Nova vida: suas habilidades voltaram ao nivel 1.", NamedTextColor.RED));
+            d.xp = 0; d.exp = 0; d.farm = 0;
             explorer.resetLife(p.getUniqueId());
+            farmer.resetLife(p.getUniqueId());
         }
         d.world = base;
     }
@@ -199,9 +228,12 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             Player t = Bukkit.getPlayerExact(a[1]);
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             int lvl = Math.max(1, Math.min(5, Integer.parseInt(a[2])));
-            boolean exp = a.length >= 4 && a[3].toLowerCase(Locale.ROOT).startsWith("expl");
-            if (exp) data(t.getUniqueId()).exp = EXP_XP[lvl - 1]; else data(t.getUniqueId()).xp = LEVEL_XP[lvl - 1];
-            s.sendMessage(t.getName() + " agora tem " + (exp ? "Exploracao" : "Engenharia") + " nivel " + lvl);
+            String skill = a.length >= 4 ? a[3].toLowerCase(Locale.ROOT) : "";
+            boolean exp = skill.startsWith("expl"), farm = skill.startsWith("plant");
+            if (exp) data(t.getUniqueId()).exp = EXP_XP[lvl - 1];
+            else if (farm) data(t.getUniqueId()).farm = FARM_XP[lvl - 1];
+            else data(t.getUniqueId()).xp = LEVEL_XP[lvl - 1];
+            s.sendMessage(t.getName() + " agora tem " + (exp ? "Exploracao" : farm ? "Plantacao" : "Engenharia") + " nivel " + lvl);
             return true;
         }
         if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("bclasses.admin")) {
@@ -216,21 +248,25 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
                     if (type.equals("cabo") || type.equals("juncao")) it.setAmount(64);
                     else if (type.equals("cano") || type.equals("solar")) it.setAmount(4);
                     else if (type.startsWith("bala")) it.setAmount(64);
-                    else if (type.endsWith("_industrial")) it.setAmount(16);
+                    else if (Engineer.COMPONENTS.contains(type)) it.setAmount(16);
                     items.add(it);
                 }
             } else if (which.startsWith("exp")) {
                 for (Explorer.Kind k : Explorer.Kind.values()) items.add(explorer.petItem(k));
                 ItemStack an = explorer.anchorItem(); an.setAmount(2); items.add(an);
                 items.add(new ItemStack(Material.ENDER_PEARL, 16));
-            } else { s.sendMessage("Use: /classe give <engenheiro|explorador> [jogador]"); return true; }
+            } else if (which.startsWith("plant") || which.startsWith("faz")) {
+                ItemStack pl = farmer.planterItem(); pl.setAmount(4); items.add(pl);
+                items.add(new ItemStack(Material.WHEAT_SEEDS, 64));
+                items.add(new ItemStack(Material.IRON_HOE));
+            } else { s.sendMessage("Use: /classe give <engenheiro|explorador|plantador> [jogador]"); return true; }
             for (ItemStack left : t.getInventory().addItem(items.toArray(new ItemStack[0])).values()) t.getWorld().dropItemNaturally(t.getLocation(), left);
-            s.sendMessage("Itens de " + (which.startsWith("eng") ? "Engenharia" : "Exploracao") + " entregues para " + t.getName() + ".");
+            s.sendMessage("Itens de " + (which.startsWith("eng") ? "Engenharia" : which.startsWith("exp") ? "Exploracao" : "Plantacao") + " entregues para " + t.getName() + ".");
             return true;
         }
         if (!(s instanceof Player p)) { s.sendMessage("Somente jogadores."); return true; }
         if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("bclasses.admin")) {
-            ItemStack it = a[1].equalsIgnoreCase("ancora") ? explorer.anchorItem() : engineer.item(a[1].toLowerCase(Locale.ROOT));
+            ItemStack it = a[1].equalsIgnoreCase("ancora") ? explorer.anchorItem() : a[1].equalsIgnoreCase("plantador") ? farmer.planterItem() : engineer.item(a[1].toLowerCase(Locale.ROOT));
             if (it == null) { p.sendMessage("Itens: " + String.join(", ", Engineer.TYPES)); return true; }
             p.getInventory().addItem(it);
             return true;
@@ -243,6 +279,8 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             p.sendMessage(Component.text(engineer.status(p), NamedTextColor.GRAY));
             int el = explorerLevel(p.getUniqueId()), ex = data(p.getUniqueId()).exp;
             p.sendMessage(Component.text("Exploracao nivel " + el + " (XP " + (el >= 5 ? "maximo" : ex + "/" + EXP_XP[el]) + ")", NamedTextColor.AQUA, TextDecoration.BOLD));
+            int fl = farmLevel(p.getUniqueId()), fxp = data(p.getUniqueId()).farm;
+            p.sendMessage(Component.text("Plantacao nivel " + fl + " (XP " + (fl >= 5 ? "maximo" : fxp + "/" + FARM_XP[fl]) + ")", NamedTextColor.GREEN, TextDecoration.BOLD));
             return true;
         }
         if (a.length >= 1 && a[0].equalsIgnoreCase("particulas")) { toggleFx(p); return true; }
@@ -279,12 +317,14 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + LEVEL_XP[lvl];
         int el = explorerLevel(p.getUniqueId()), ex = data(p.getUniqueId()).exp;
         inv.setItem(11, skillIcon(Material.COMPASS, "Exploracao - nivel " + el, NamedTextColor.AQUA, List.of(
-                el >= 5 ? "Nivel maximo" : "XP " + ex + "/" + EXP_XP[el], "", "Companheiro (lobo, raposa, gato),", "Ancora de Perola e bonus de carne.",
+                el >= 5 ? "Nivel maximo" : "XP " + ex + "/" + EXP_XP[el], "", "Companheiro (lobo, raposa, gato),", "Ancora de Perola, bonus de carne e de XP.",
                 "Sobe visitando chunks novos.", "", "Clique para abrir.")));
         inv.setItem(13, skillIcon(Material.DISPENSER, "Engenharia - nivel " + lvl, NamedTextColor.GOLD, List.of(
-                next, "", "Torres, geradores, cabos e postes.", "Sobe montando, reparando e com", "abates das suas torres.", "", "Clique para abrir.")));
-        inv.setItem(15, skillIcon(Material.GOLDEN_HOE, "Coleta", NamedTextColor.GREEN, List.of(
-                "Farm e plantio automatizado.", "", "Em breve")));
+                next, "", "Torres, energia, linha industrial", "e tuneladora. Sobe montando e com", "abates das suas torres.", "", "Clique para abrir.")));
+        int fl = farmLevel(p.getUniqueId()), fxp = data(p.getUniqueId()).farm;
+        inv.setItem(15, skillIcon(Material.GOLDEN_HOE, "Plantacao - nivel " + fl, NamedTextColor.GREEN, List.of(
+                fl >= 5 ? "Nivel maximo" : "XP " + fxp + "/" + FARM_XP[fl], "", "Plantadores (golems de cobre) que", "plantam do bau, e colheita extra.",
+                "Sobe colhendo plantacao madura.", "", "Clique para abrir.")));
         inv.setItem(22, skillIcon(Material.BOOK, "Como funciona", NamedTextColor.WHITE, List.of(
                 "Ninguem escolhe classe: todo mundo", "pode fazer tudo. Cada habilidade", "tem nivel proprio e libera mais", "coisas conforme sobe.", "", "Os niveis zeram quando a vida acaba.")));
         p.openInventory(inv);
@@ -297,10 +337,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         if (e.getRawSlot() == 13) engineer.openPanel(p);
         else if (e.getRawSlot() == 11) explorer.openPanel(p);
-        else if (e.getRawSlot() == 15) {
-            p.sendMessage(Component.text("Essa habilidade ainda esta em construcao.", NamedTextColor.GRAY));
-            p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
-        }
+        else if (e.getRawSlot() == 15) farmer.openPanel(p);
     }
 
     @EventHandler
@@ -313,9 +350,9 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); }
             return o;
         }
-        if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); return o; }
-        if (a.length == 2 && a[0].equalsIgnoreCase("give")) return List.of("engenheiro", "explorador");
-        if (a.length == 4 && a[0].equalsIgnoreCase("admin")) return List.of("engenharia", "exploracao");
+        if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }
+        if (a.length == 2 && a[0].equalsIgnoreCase("give")) return List.of("engenheiro", "explorador", "plantador");
+        if (a.length == 4 && a[0].equalsIgnoreCase("admin")) return List.of("engenharia", "exploracao", "plantacao");
         return null;
     }
 }

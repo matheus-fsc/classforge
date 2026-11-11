@@ -39,17 +39,31 @@ import java.util.*;
 final class Engineer implements Listener {
 
     static final String[] TYPES = {"bancada", "torre", "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao", "cano", "forja", "bala_ferro", "bala_cobre",
-            "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora", "ferro_industrial", "fundicao", "cobre_industrial"};
+            "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora", "ferro_industrial", "fundicao", "cobre_industrial",
+            "prensa", "torno", "bobinadeira", "cadinho", "gravadora",
+            "chapa_ferro", "chapa_cobre", "chapa_aco", "fio_cobre", "engrenagem", "bobina", "aco", "liga", "circuito", "processador", "motor",
+            "laminadora", "estacao", "trem", "broca", "modulo_coleta", "modulo_isolante"};
 
-    static final String[] TABS = {"Defesa", "Energia", "Maquinas"};
+    /** Equipamentos que nao sao blocos: entram em espacos de maquina ou na armadura. */
+    static final Set<String> GEAR = Set.of("trem", "broca", "modulo_coleta", "modulo_isolante");
+
+    /** Pecas intermediarias: nao sao blocos, so entram em receitas da Engenharia. */
+    static final Set<String> COMPONENTS = Set.of("ferro_industrial", "cobre_industrial", "chapa_ferro", "chapa_cobre", "chapa_aco",
+            "fio_cobre", "engrenagem", "bobina", "aco", "liga", "circuito", "processador", "motor");
+
+    static final String[] TABS = {"Defesa", "Energia", "Maquinas", "Componentes"};
     static int tabOf(String type) {
         return switch (type) {
-            case "torre", "cano", "escudo", "bala_ferro", "bala_cobre" -> 0;
+            case "torre", "cano", "escudo", "bala_ferro", "bala_cobre", "modulo_isolante" -> 0;
             case "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao" -> 1;
-            default -> 2;
+            default -> COMPONENTS.contains(type) || type.equals("triturado") ? 3 : 2;
         };
     }
-    static final Set<String> MACHINES = Set.of("fundicao", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora");
+    static final Set<String> MACHINES = Set.of("fundicao", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora",
+            "prensa", "torno", "bobinadeira", "cadinho", "gravadora", "laminadora", "estacao");
+    /** Choque do cabo: dano a cada SHOCK_MS enquanto encostar. +25% por peca de armadura de metal. */
+    static final double SHOCK_DMG = 1.0;
+    static final long SHOCK_MS = 500;
 
     // por nivel 1..5
     /** Alcance de visao das etiquetas (multiplicador de 64 blocos): ~6 blocos. */
@@ -105,6 +119,8 @@ final class Engineer implements Listener {
         double energy, lastRate; int burn; long nextShot; boolean powered; int barrel = BARREL_MAX;
         int cursor; String sel = "cabo"; String status = "";
         TextDisplay tag;
+        /** Maquinas de processo (Factory): a tela e o inventario delas. */
+        Inventory gui;
         boolean tagOn = true, enabled = true; int filter = 0b1111111; int prio; int ammoPref; int mode;
         Device(String type, String world, int x, int y, int z, UUID owner) {
             this.type = type; this.world = world; this.x = x; this.y = y; this.z = z; this.owner = owner;
@@ -132,6 +148,10 @@ final class Engineer implements Listener {
     private int powerTicks;
     private EnergyFx fx;
     private final List<Recipe> recipes = new ArrayList<>();
+    final Factory factory;
+    final Tunnel tunnel;
+    private final NamespacedKey insulKey;
+    private final List<Device> orphans = new ArrayList<>();
 
     Engineer(BabylonClasses plugin) {
         this.plugin = plugin;
@@ -140,6 +160,9 @@ final class Engineer implements Listener {
         this.recipeKey = new NamespacedKey(plugin, "bancada");
         this.barrelKey = new NamespacedKey(plugin, "barrel");
         this.file = new File(plugin.getDataFolder(), "devices.yml");
+        this.factory = new Factory(plugin, this);
+        this.tunnel = new Tunnel(plugin, this);
+        this.insulKey = new NamespacedKey(plugin, "sola-isolante");
         // Fundicao Termica: sem energia, unica receita so com itens vanilla (comeco da cadeia industrial)
         recipes.add(new Recipe("fundicao", 1, costs(Material.BLAST_FURNACE, 1, Material.IRON_BLOCK, 2, Material.COPPER_BLOCK, 2, Material.MAGMA_BLOCK, 2)));
         recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.CROSSBOW, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 4)));
@@ -152,12 +175,26 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("geotermico", 2, costs(Material.COBBLED_DEEPSLATE, 6, Material.MAGMA_BLOCK, 2, Material.REDSTONE_BLOCK, 1), 1, parts("cobre_industrial", 2, "ferro_industrial", 1)));
         recipes.add(new Recipe("bateria", 2, costs(Material.REDSTONE_BLOCK, 2), 1, parts("cobre_industrial", 3, "ferro_industrial", 1)));
         recipes.add(new Recipe("forja", 2, costs(Material.FURNACE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "cobre_industrial", 2)));
-        recipes.add(new Recipe("fornalha", 3, costs(Material.FURNACE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 1, "cobre_industrial", 2)));
-        recipes.add(new Recipe("triturador", 3, costs(Material.GRINDSTONE, 1, Material.DIAMOND, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2)));
-        recipes.add(new Recipe("plantadeira", 3, costs(Material.COMPOSTER, 1, Material.DROPPER, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 1, "cobre_industrial", 1)));
-        recipes.add(new Recipe("montadora", 4, costs(Material.CRAFTER, 1, Material.GOLD_INGOT, 2, Material.REDSTONE_BLOCK, 2), 1, parts("ferro_industrial", 2, "cobre_industrial", 1)));
-        recipes.add(new Recipe("escudo", 4, costs(Material.AMETHYST_SHARD, 4, Material.DIAMOND, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "cobre_industrial", 3)));
-        recipes.add(new Recipe("mineradora", 5, costs(Material.DIAMOND_PICKAXE, 1, Material.OBSERVER, 1, Material.REDSTONE_BLOCK, 2), 1, parts("ferro_industrial", 4)));
+        // linha industrial: prensa e torno saem so com Ferro/Cobre Industrial; o resto ja pede pecas feitas neles
+        recipes.add(new Recipe("prensa", 2, costs(Material.PISTON, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 3, "cobre_industrial", 1)));
+        recipes.add(new Recipe("torno", 2, costs(Material.STONECUTTER, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "cobre_industrial", 1)));
+        recipes.add(new Recipe("bobinadeira", 3, costs(Material.LOOM, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 2, "engrenagem", 2, "fio_cobre", 4)));
+        recipes.add(new Recipe("motor", 3, costs(Material.REDSTONE, 2), 1, parts("bobina", 1, "engrenagem", 2, "chapa_ferro", 1)));
+        recipes.add(new Recipe("cadinho", 3, costs(Material.CAULDRON, 1, Material.MAGMA_BLOCK, 2, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 4, "bobina", 2)));
+        recipes.add(new Recipe("gravadora", 3, costs(Material.CARTOGRAPHY_TABLE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 2, "fio_cobre", 4, "motor", 1)));
+        recipes.add(new Recipe("fornalha", 3, costs(Material.FURNACE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 2, "bobina", 1)));
+        recipes.add(new Recipe("triturador", 3, costs(Material.GRINDSTONE, 1, Material.DIAMOND, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 2, "engrenagem", 2, "motor", 1)));
+        recipes.add(new Recipe("plantadeira", 3, costs(Material.COMPOSTER, 1, Material.DROPPER, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_ferro", 1, "engrenagem", 1, "fio_cobre", 2)));
+        recipes.add(new Recipe("montadora", 4, costs(Material.CRAFTER, 1, Material.REDSTONE_BLOCK, 2), 1, parts("chapa_aco", 2, "motor", 1, "circuito", 2)));
+        recipes.add(new Recipe("escudo", 4, costs(Material.AMETHYST_SHARD, 4, Material.DIAMOND, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_aco", 1, "bobina", 3, "circuito", 1)));
+        recipes.add(new Recipe("mineradora", 5, costs(Material.DIAMOND_PICKAXE, 1, Material.OBSERVER, 1, Material.REDSTONE_BLOCK, 2), 1, parts("chapa_aco", 4, "motor", 2, "processador", 1)));
+        // tuneladora: laminadora faz os trilhos, a estacao lanca o trem
+        recipes.add(new Recipe("laminadora", 4, costs(Material.FLETCHING_TABLE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("chapa_aco", 2, "engrenagem", 4, "motor", 1)));
+        recipes.add(new Recipe("broca", 4, costs(Material.DIAMOND, 3), 1, parts("chapa_aco", 1, "engrenagem", 1)));
+        recipes.add(new Recipe("estacao", 5, costs(Material.OBSERVER, 1, Material.RAIL, 16, Material.REDSTONE_BLOCK, 2), 1, parts("chapa_aco", 4, "circuito", 2, "motor", 1)));
+        recipes.add(new Recipe("trem", 5, costs(Material.FURNACE_MINECART, 1), 1, parts("chapa_aco", 4, "motor", 2, "processador", 1)));
+        recipes.add(new Recipe("modulo_coleta", 5, costs(Material.HOPPER_MINECART, 1, Material.CHEST_MINECART, 1), 1, parts("chapa_ferro", 2, "circuito", 1)));
+        recipes.add(new Recipe("modulo_isolante", 2, costs(Material.LEATHER, 2, Material.DRIED_KELP, 4), 1, parts("chapa_cobre", 1)));
     }
 
     private static Map<String, Integer> parts(Object... kv) {
@@ -183,6 +220,9 @@ final class Engineer implements Listener {
         Bukkit.removeRecipe(recipeKey);
         Bukkit.addRecipe(r);
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        Bukkit.getPluginManager().registerEvents(factory, plugin);
+        Bukkit.getPluginManager().registerEvents(tunnel, plugin);
+        invalidate();
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickTurrets, 5L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickPower, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickShock, 10L, 5L);
@@ -226,6 +266,28 @@ final class Engineer implements Listener {
             case "ferro_industrial" -> { mat = Material.IRON_INGOT; name = "Ferro Industrial"; lore = List.of("Bloco de ferro fundido na", "Fundicao Termica. Base de todo", "craft da Engenharia."); }
             case "cobre_industrial" -> { mat = Material.COPPER_INGOT; name = "Cobre Industrial"; lore = List.of("Bloco de cobre fundido na", "Fundicao Termica. Base dos cabos", "e da parte eletrica."); }
             case "fundicao" -> { mat = Material.BLAST_FURNACE; name = "Fundicao Termica"; lore = List.of("Funde bloco de ferro ou cobre em", "Ferro / Cobre Industrial (" + INDUSTRIAL_TIME + "s cada).", "Nao usa energia: queima so bloco de", "carvao (" + FUEL_COAL_BLOCK / INDUSTRIAL_TIME + " itens) ou balde de lava (" + FUEL_LAVA / INDUSTRIAL_TIME + ")."); }
+            case "prensa" -> { mat = Material.PISTON; name = "Prensa Hidraulica"; lore = List.of("Prensa Ferro, Cobre Industrial e Aco", "em chapas (2 por lingote).", "Interface propria: clique para abrir.", "Bau em cima abastece, embaixo recebe."); }
+            case "torno" -> { mat = Material.STONECUTTER; name = "Torno Mecanico"; lore = List.of("Puxa Fio de Cobre do Cobre Industrial", "e corta Engrenagens da Chapa de Ferro.", "Interface propria: clique para abrir.", "Bau em cima abastece, embaixo recebe."); }
+            case "bobinadeira" -> { mat = Material.LOOM; name = "Bobinadeira"; lore = List.of("Enrola Fio de Cobre numa Chapa de", "Ferro e faz Bobinas (motores,", "fornalha eletrica, escudo).", "Interface propria: clique para abrir."); }
+            case "cadinho" -> { mat = Material.CAULDRON; name = "Cadinho de Liga"; lore = List.of("Forno a arco: funde Ferro Industrial", "com carvao em Aco, e cobre com ouro", "e redstone em Liga Condutora.", "Interface propria: clique para abrir."); }
+            case "gravadora" -> { mat = Material.CARTOGRAPHY_TABLE; name = "Gravadora de Circuitos"; lore = List.of("Grava Circuitos de Redstone em chapa", "de cobre, e monta o Circuito Avancado.", "Interface propria: clique para abrir."); }
+            case "chapa_ferro" -> { mat = Material.HEAVY_WEIGHTED_PRESSURE_PLATE; name = "Chapa de Ferro"; lore = List.of("Ferro Industrial prensado.", "Feita na Prensa Hidraulica."); }
+            case "chapa_cobre" -> { mat = Material.WAXED_COPPER_TRAPDOOR; name = "Chapa de Cobre"; lore = List.of("Cobre Industrial prensado.", "Feita na Prensa Hidraulica."); }
+            case "chapa_aco" -> { mat = Material.IRON_TRAPDOOR; name = "Chapa de Aco"; lore = List.of("Aco prensado: carcaca das", "maquinas avancadas.", "Feita na Prensa Hidraulica."); }
+            case "fio_cobre" -> { mat = Material.STRING; name = "Fio de Cobre"; lore = List.of("Cobre Industrial trefilado.", "Feito no Torno Mecanico."); }
+            case "engrenagem" -> { mat = Material.FIREWORK_STAR; name = "Engrenagem"; lore = List.of("Cortada da Chapa de Ferro.", "Feita no Torno Mecanico."); }
+            case "bobina" -> { mat = Material.WAXED_COPPER_BARS; name = "Bobina de Cobre"; lore = List.of("Fio de cobre enrolado num nucleo", "de ferro. Feita na Bobinadeira."); }
+            case "aco" -> { mat = Material.NETHERITE_INGOT; name = "Aco"; lore = List.of("Ferro Industrial fundido com carvao.", "Feito no Cadinho de Liga.", "Nao serve como netherita."); }
+            case "liga" -> { mat = Material.GOLD_INGOT; name = "Liga Condutora"; lore = List.of("Cobre, ouro e redstone fundidos.", "Feita no Cadinho de Liga."); }
+            case "circuito" -> { mat = Material.REPEATER; name = "Circuito de Redstone"; lore = List.of("Trilhas de redstone gravadas em", "chapa de cobre.", "Feito na Gravadora de Circuitos."); }
+            case "processador" -> { mat = Material.COMPARATOR; name = "Circuito Avancado"; lore = List.of("Dois circuitos, liga condutora e", "diamante. Cerebro da Mineradora.", "Feito na Gravadora de Circuitos."); }
+            case "motor" -> { mat = Material.HEAVY_CORE; name = "Motor Eletrico"; lore = List.of("Bobina, engrenagens e chapa.", "Montado na Bancada de Engenharia."); }
+            case "laminadora" -> { mat = Material.FLETCHING_TABLE; name = "Laminadora de Trilhos"; lore = List.of("4 lingotes de ferro + 2 madeiras", "(tabua ou tronco) = 16 trilhos.", "Em cima da Estacao da Tuneladora", "entrega os trilhos direto nela.", "Interface propria: clique para abrir."); }
+            case "estacao" -> { mat = Material.OBSERVER; name = "Estacao da Tuneladora"; lore = List.of("Lanca o Trem Tunelador: tunel reto 3x3", "na direcao em que voce olha ao colocar,", "com trilho no chao e cabo no teto.", "Guarda trilhos, cabos e brocas.", "Gasta " + (int) Tunnel.STEP_RATE + " energia/s escavando. Limite de 1."); }
+            case "trem" -> { mat = Material.FURNACE_MINECART; name = "Trem Tunelador"; lore = List.of("Carrinho de fornalha com broca.", "Coloque na Estacao da Tuneladora.", "1 bloco de tunel a cada " + Tunnel.STEP_SECONDS + "s."); }
+            case "broca" -> { mat = Material.POINTED_DRIPSTONE; name = "Broca de Diamante"; lore = List.of("Aguenta " + Tunnel.DRILL_MAX + " blocos escavados.", "Deixe reservas na estacao: o trem", "troca sozinho quando gasta."); }
+            case "modulo_coleta" -> { mat = Material.HOPPER_MINECART; name = "Modulo de Coleta"; lore = List.of("Upgrade da Estacao da Tuneladora.", "O trem suga o que escava e um", "vagao-bau leva para a estacao."); }
+            case "modulo_isolante" -> { mat = Material.LEATHER; name = "Sola Isolante"; lore = List.of("Modulo de armadura: no inventario,", "clique com ela em cima de uma bota.", "Bota isolada nao leva choque de cabo."); }
             case "juncao" -> { mat = Material.WAXED_COPPER_BLOCK; name = "Juncao de Cabo"; lore = List.of("Bloco de cobre que conduz como o cabo.", "Use nas curvas e emendas, pode empilhar.", "Energizado da choque em quem encostar."); }
             default -> { return null; }
         }
@@ -237,7 +299,7 @@ final class Engineer implements Listener {
         l.add(Component.text("Engenharia", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
         m.lore(l);
         m.getPersistentDataContainer().set(devKey, PersistentDataType.STRING, type);
-        if (type.endsWith("_industrial")) m.setEnchantmentGlintOverride(true);
+        if (COMPONENTS.contains(type) || GEAR.contains(type)) m.setEnchantmentGlintOverride(true);
         it.setItemMeta(m);
         return it;
     }
@@ -268,7 +330,16 @@ final class Engineer implements Listener {
             case "forja" -> "Forja de Municao"; case "bala_ferro" -> "Bala de Ferro"; case "bala_cobre" -> "Bala de Cobre";
             case "fornalha" -> "Fornalha Eletrica"; case "triturador" -> "Triturador"; case "plantadeira" -> "Plantadeira";
             case "montadora" -> "Montadora"; case "escudo" -> "Escudo Eletrico"; case "mineradora" -> "Mineradora";
-            case "ferro_industrial" -> "Ferro Industrial"; case "cobre_industrial" -> "Cobre Industrial"; case "fundicao" -> "Fundicao Termica"; case "triturado" -> "Minerio Triturado"; default -> type;
+            case "ferro_industrial" -> "Ferro Industrial"; case "cobre_industrial" -> "Cobre Industrial"; case "fundicao" -> "Fundicao Termica"; case "triturado" -> "Minerio Triturado";
+            case "prensa" -> "Prensa Hidraulica"; case "torno" -> "Torno Mecanico"; case "bobinadeira" -> "Bobinadeira";
+            case "cadinho" -> "Cadinho de Liga"; case "gravadora" -> "Gravadora de Circuitos";
+            case "chapa_ferro" -> "Chapa de Ferro"; case "chapa_cobre" -> "Chapa de Cobre"; case "chapa_aco" -> "Chapa de Aco";
+            case "fio_cobre" -> "Fio de Cobre"; case "engrenagem" -> "Engrenagem"; case "bobina" -> "Bobina de Cobre";
+            case "aco" -> "Aco"; case "liga" -> "Liga Condutora"; case "circuito" -> "Circuito de Redstone";
+            case "processador" -> "Circuito Avancado"; case "motor" -> "Motor Eletrico";
+            case "laminadora" -> "Laminadora de Trilhos"; case "estacao" -> "Estacao da Tuneladora"; case "trem" -> "Trem Tunelador";
+            case "broca" -> "Broca de Diamante"; case "modulo_coleta" -> "Modulo de Coleta"; case "modulo_isolante" -> "Sola Isolante";
+            default -> type;
         };
     }
 
@@ -282,9 +353,61 @@ final class Engineer implements Listener {
             if (typeOf(it) != null) { e.getInventory().setResult(null); return; }
     }
 
+    /** Aco usa o item de lingote de netherita: nao pode virar equipamento na mesa de ferraria. */
+    @EventHandler
+    public void onSmithing(org.bukkit.event.inventory.PrepareSmithingEvent e) {
+        for (ItemStack it : e.getInventory().getContents())
+            if (typeOf(it) != null) { e.setResult(null); return; }
+    }
+
+    /** Trem e modulo usam itens de carrinho: nao viram carrinho de verdade num trilho. */
+    @EventHandler
+    public void onUseGear(PlayerInteractEvent e) {
+        if (e.getItem() == null || !e.getAction().isRightClick()) return;
+        String t = typeOf(e.getItem());
+        if (t != null && GEAR.contains(t)) e.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
+    }
+
+    // ---------- modulos de armadura ----------
+
+    boolean insulated(ItemStack boots) {
+        return boots != null && boots.hasItemMeta() && boots.getItemMeta().getPersistentDataContainer().has(insulKey, PersistentDataType.BYTE);
+    }
+
+    /** Sola Isolante: clicar com ela (no cursor) em cima de uma bota instala o modulo. */
+    @EventHandler(ignoreCancelled = true)
+    public void onArmorModule(InventoryClickEvent e) {
+        ItemStack cursor = e.getCursor(), target = e.getCurrentItem();
+        if (!"modulo_isolante".equals(typeOf(cursor)) || target == null || !target.getType().name().endsWith("_BOOTS")) return;
+        if (!(e.getWhoClicked() instanceof Player p) || !e.isLeftClick()) return;
+        e.setCancelled(true);
+        if (insulated(target)) { p.sendActionBar(Component.text("Essa bota ja tem Sola Isolante.", NamedTextColor.YELLOW)); return; }
+        ItemMeta m = target.getItemMeta();
+        m.getPersistentDataContainer().set(insulKey, PersistentDataType.BYTE, (byte) 1);
+        List<Component> l = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
+        l.add(Component.text("⚡ Sola Isolante: imune a choque de cabo", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
+        m.lore(l);
+        target.setItemMeta(m);
+        e.setCurrentItem(target);
+        cursor.setAmount(cursor.getAmount() - 1);
+        p.setItemOnCursor(cursor.getAmount() > 0 ? cursor : null);
+        p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1.3f);
+        p.sendMessage(Component.text("⚙ Sola Isolante instalada na bota.", NamedTextColor.GOLD));
+    }
+
+    /** Onde uma peca e feita, para as mensagens de "falta X". */
+    String madeIn(String type) {
+        if (type.endsWith("_industrial")) return "Feito na Fundicao Termica.";
+        Factory.Proc pr = Factory.procFor(type);
+        if (pr != null) return "Feito em: " + label(pr.machine()) + ".";
+        return "Montado na Bancada de Engenharia.";
+    }
+
     // ---------- colocar / quebrar ----------
 
-    private Device at(Block b) { return devices.get(b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ()); }
+    Device device(String key) { return devices.get(key); }
+
+    Device at(Block b) { return devices.get(b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ()); }
 
     private long countType(UUID owner, String world, String type) {
         String base = BabylonClasses.baseOf(world);
@@ -309,7 +432,7 @@ final class Engineer implements Listener {
             invalidate();
             return;
         }
-        if (type.equals("cano") || type.startsWith("bala") || type.endsWith("_industrial") || type.equals("triturado")) { e.setCancelled(true); return; }
+        if (type.equals("cano") || type.startsWith("bala") || COMPONENTS.contains(type) || GEAR.contains(type) || type.equals("triturado")) { e.setCancelled(true); return; }
         Block b = e.getBlockPlaced();
         int lvl = plugin.level(p.getUniqueId());
         if (type.equals("torre") && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
@@ -317,7 +440,7 @@ final class Engineer implements Listener {
             p.sendMessage(Component.text("Limite de " + MAX_TURRETS[lvl - 1] + " torres no nivel " + lvl + ".", NamedTextColor.RED));
             return;
         }
-        int maxOf = type.equals("escudo") ? (lvl >= 5 ? 2 : 1) : type.equals("mineradora") ? 1 : -1;
+        int maxOf = type.equals("escudo") ? (lvl >= 5 ? 2 : 1) : type.equals("mineradora") || type.equals("estacao") ? 1 : -1;
         if (maxOf > 0 && countType(p.getUniqueId(), b.getWorld().getName(), type) >= maxOf) {
             e.setCancelled(true);
             p.sendMessage(Component.text("Limite de " + maxOf + " " + label(type) + " no nivel " + lvl + ".", NamedTextColor.RED));
@@ -333,10 +456,14 @@ final class Engineer implements Listener {
         }
         devices.put(d.key(), d);
         invalidate();
+        // a prensa sempre aponta para cima
+        if (type.equals("prensa") && b.getBlockData() instanceof org.bukkit.block.data.Directional dir) { dir.setFacing(BlockFace.UP); b.setBlockData(dir, false); }
         p.sendMessage(Component.text("⚙ " + label(type) + " instalado.", NamedTextColor.GOLD));
+        if (type.equals("estacao")) tunnel.placed(d, b, p);
         if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e ligue com cabo num gerador ou bateria.", NamedTextColor.GRAY));
         if (type.equals("solar")) p.sendMessage(Component.text("Painel solar gera CC: ligue um Inversor na mesma rede.", NamedTextColor.GRAY));
         if (type.equals("fundicao")) p.sendMessage(Component.text("Bloco de ferro/cobre em cima, bloco de carvao ou balde de lava no combustivel.", NamedTextColor.GRAY));
+        else if (Factory.TYPES.contains(type)) p.sendMessage(Component.text("Ligue com cabo numa rede com energia e clique para abrir a interface. Bau em cima abastece, bau embaixo recebe.", NamedTextColor.GRAY));
         else if (MACHINES.contains(type)) p.sendMessage(Component.text("Ligue com cabo numa rede com energia. Clique nela para ver o menu.", NamedTextColor.GRAY));
     }
 
@@ -345,6 +472,8 @@ final class Engineer implements Listener {
         devices.remove(d.key());
         invalidate();
         removeTag(d);
+        if (d.type.equals("estacao")) tunnel.drop(d, b.getLocation().add(0.5, 0.5, 0.5));
+        else factory.drop(d, b.getLocation().add(0.5, 0.5, 0.5));
         BlockState st = b.getState();
         if (st instanceof Container c) {
             for (ItemStack it : c.getInventory().getContents())
@@ -402,7 +531,10 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true) public void onBlockExplode(BlockExplodeEvent e) { explode(e.blockList()); }
 
     @EventHandler(ignoreCancelled = true)
-    public void onPistonOut(BlockPistonExtendEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b) || poleBlocks.containsKey(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()))) { e.setCancelled(true); return; } }
+    public void onPistonOut(BlockPistonExtendEvent e) {
+        if (at(e.getBlock()) != null) { e.setCancelled(true); return; } // a prensa e um pistao que nunca estende
+        for (Block b : e.getBlocks()) if (at(b) != null || isCable(b) || poleBlocks.containsKey(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()))) { e.setCancelled(true); return; }
+    }
     @EventHandler(ignoreCancelled = true)
     public void onPistonIn(BlockPistonRetractEvent e) { for (Block b : e.getBlocks()) if (at(b) != null || isCable(b) || poleBlocks.containsKey(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()))) { e.setCancelled(true); return; } }
     @EventHandler(ignoreCancelled = true)
@@ -410,7 +542,14 @@ final class Engineer implements Listener {
 
     /** Torre nunca despeja flechas com redstone. */
     @EventHandler(ignoreCancelled = true)
-    public void onDispense(BlockDispenseEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
+    public void onDispense(BlockDispenseEvent e) {
+        if (at(e.getBlock()) != null) { e.setCancelled(true); return; }
+        // dispenser com balde nao tira o metal derretido do cadinho (seria lava infinita)
+        if (e.getBlock().getBlockData() instanceof org.bukkit.block.data.Directional dir) {
+            Device front = at(e.getBlock().getRelative(dir.getFacing()));
+            if (front != null && front.type.equals("cadinho")) e.setCancelled(true);
+        }
+    }
 
     /** Gerador a carvao nao queima combustivel do jeito vanilla: quem consome e o plugin. */
     @EventHandler(ignoreCancelled = true)
@@ -458,6 +597,18 @@ final class Engineer implements Listener {
                 e.setCancelled(true);
                 openMachine(p, d);
             }
+            case "prensa", "torno", "bobinadeira", "cadinho", "gravadora", "laminadora" -> {
+                ItemStack hand = p.getInventory().getItemInMainHand();
+                if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return;
+                e.setCancelled(true);
+                factory.open(p, d);
+            }
+            case "estacao" -> {
+                ItemStack hand = p.getInventory().getItemInMainHand();
+                if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return;
+                e.setCancelled(true);
+                tunnel.open(p, d);
+            }
             case "torre" -> {
                 ItemStack hand = p.getInventory().getItemInMainHand();
                 if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return; // agachado com bloco: deixa colocar
@@ -476,8 +627,8 @@ final class Engineer implements Listener {
     }
 
     private static final int[] CAT_SLOTS = {19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
-    private static final Material[] TAB_ICON = {Material.SHIELD, Material.LIGHTNING_ROD, Material.PISTON};
-    private static final String[] TAB_DESC = {"Torres, canos, escudo e municao.", "Geradores, baterias e cabos.", "Forja, fornalha, triturador e mais."};
+    private static final Material[] TAB_ICON = {Material.SHIELD, Material.LIGHTNING_ROD, Material.PISTON, Material.REPEATER};
+    private static final String[] TAB_DESC = {"Torres, canos, escudo, municao e Sola Isolante.", "Geradores, baterias e cabos.", "Fundicao, prensa, torno, forja e mais.", "Chapas, fios, bobinas, aco e circuitos."};
 
     private void openBench(Player p) { openCatalog(p, 0); }
 
@@ -493,7 +644,7 @@ final class Engineer implements Listener {
             boolean sel = t == tab;
             ItemStack ic = icon(TAB_ICON[t], TABS[t], sel ? NamedTextColor.GREEN : NamedTextColor.GRAY, TAB_DESC[t], "", sel ? "Aba aberta" : "Clique para abrir");
             if (sel) { ItemMeta m = ic.getItemMeta(); m.setEnchantmentGlintOverride(true); ic.setItemMeta(m); }
-            inv.setItem(2 + t * 2, ic);
+            inv.setItem(1 + t * 2, ic);
         }
         ItemStack line = icon(sel(tab), " ", NamedTextColor.GRAY);
         for (int i = 9; i < 18; i++) inv.setItem(i, line);
@@ -506,9 +657,11 @@ final class Engineer implements Listener {
         // produtos que nao saem da bancada
         List<String[]> extra = new ArrayList<>();
         if (tab == 0) { extra.add(new String[]{"bala_cobre", "Feita na Forja: 9 pepitas de cobre."}); extra.add(new String[]{"bala_ferro", "Feita na Forja: 9 pepitas de ferro."}); }
-        if (tab == 2) {
+        if (tab == 3) {
             extra.add(new String[]{"ferro_industrial", "Fundicao Termica: 1 bloco de ferro (" + INDUSTRIAL_TIME + "s)."});
             extra.add(new String[]{"cobre_industrial", "Fundicao Termica: 1 bloco de cobre (" + INDUSTRIAL_TIME + "s)."});
+            for (Factory.Proc pr : Factory.PROCS)
+                if (!Factory.vanilla(pr)) extra.add(new String[]{pr.out(), label(pr.machine()) + " (nivel " + pr.minLevel() + ", " + pr.seconds() + "s):", Factory.insText(pr) + " = " + pr.amount() + "x"});
         }
         for (String[] ex : extra) {
             if (k >= CAT_SLOTS.length) break;
@@ -516,11 +669,11 @@ final class Engineer implements Listener {
             ItemMeta m = it.getItemMeta();
             List<Component> l = new ArrayList<>(Objects.requireNonNullElse(m.lore(), List.of()));
             l.add(Component.empty());
-            l.add(Component.text(ex[1], NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            for (int li = 1; li < ex.length; li++) l.add(Component.text(ex[li], NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             m.lore(l); it.setItemMeta(m);
             inv.setItem(CAT_SLOTS[k++], it);
         }
-        if (tab == 2) {
+        if (tab == 3) {
             ItemStack tri = crushed(Material.RAW_IRON, 1);
             ItemMeta m = tri.getItemMeta();
             m.lore(List.of(Component.text("Sai do Triturador: minerio bruto", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
@@ -533,7 +686,7 @@ final class Engineer implements Listener {
     }
 
     private static Material sel(int tab) {
-        return switch (tab) { case 0 -> Material.RED_STAINED_GLASS_PANE; case 1 -> Material.YELLOW_STAINED_GLASS_PANE; default -> Material.LIGHT_BLUE_STAINED_GLASS_PANE; };
+        return switch (tab) { case 0 -> Material.RED_STAINED_GLASS_PANE; case 1 -> Material.YELLOW_STAINED_GLASS_PANE; case 2 -> Material.LIGHT_BLUE_STAINED_GLASS_PANE; default -> Material.ORANGE_STAINED_GLASS_PANE; };
     }
 
     private ItemStack recipeIcon(Player p, Recipe r, String action) {
@@ -565,7 +718,7 @@ final class Engineer implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private static ItemStack icon(Material mat, String name, NamedTextColor color, String... lore) {
+    static ItemStack icon(Material mat, String name, NamedTextColor color, String... lore) {
         ItemStack it = new ItemStack(mat);
         ItemMeta m = it.getItemMeta();
         m.displayName(Component.text(name, color, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
@@ -600,6 +753,7 @@ final class Engineer implements Listener {
                 "+ Trocar cano de torre: +" + XP_REPAIR,
                 "+ Abate de torre sua: +" + XP_KILL,
                 "+ Forja: +1 por lote. Fornalha eletrica", "  e triturador: +1 a cada 4 itens",
+                "+ Prensa, torno, bobinadeira, cadinho", "  e gravadora: +1 a cada 2 lotes",
                 "", "Montadora e mineradora nao dao XP."));
 
         inv.setItem(10, icon(Material.SMITHING_TABLE, "Bancada de Engenharia", NamedTextColor.GOLD,
@@ -620,10 +774,10 @@ final class Engineer implements Listener {
             lore.add("+ Ate " + MAX_TURRETS[i] + " torres");
             lore.add("+ Alcance " + RANGE[i] + " blocos");
             lore.add("+ " + String.format(Locale.ROOT, "%.1f", 20.0 / COOLDOWN[i]) + " tiros por segundo");
-            if (L == 2) lore.add("+ Libera Geotermico, Bateria e Forja");
-            if (L == 3) { lore.add("+ Flecha de fogo (30%)"); lore.add("+ Fornalha Eletrica, Triturador, Plantadeira"); }
-            if (L == 4) lore.add("+ Montadora e Escudo Eletrico");
-            if (L == 5) { lore.add("+ Tiro duplo"); lore.add("+ Mineradora, 2 escudos"); }
+            if (L == 2) { lore.add("+ Libera Geotermico, Bateria e Forja"); lore.add("+ Prensa e Torno: chapas, fios, engrenagens"); }
+            if (L == 3) { lore.add("+ Flecha de fogo (30%)"); lore.add("+ Fornalha Eletrica, Triturador, Plantadeira"); lore.add("+ Bobinadeira, Cadinho, Gravadora"); lore.add("+ Aco, bobina, motor e circuito"); }
+            if (L == 4) { lore.add("+ Montadora e Escudo Eletrico"); lore.add("+ Circuito Avancado"); lore.add("+ Laminadora de Trilhos, Broca"); }
+            if (L == 5) { lore.add("+ Tiro duplo"); lore.add("+ Mineradora, 2 escudos"); lore.add("+ Tuneladora: estacao, trem e coleta"); }
             lore.add("");
             lore.add(got ? "Liberado" : "Bloqueado");
             inv.setItem(29 + i, icon(got ? mats[i] : Material.BLACK_STAINED_GLASS_PANE, "Nivel " + L, got ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY, lore.toArray(new String[0])));
@@ -635,7 +789,8 @@ final class Engineer implements Listener {
                 "Energia guardada: " + (int) storedEnergy(id, w)));
         inv.setItem(48, icon(Material.LIGHTNING_ROD, "Como funciona a energia", NamedTextColor.YELLOW,
                 "Ligue as maquinas com Cabos de Energia.", "Tudo encostado no mesmo cabo e uma rede.",
-                "Alavanca no meio do cabo = disjuntor.", "Juncao (bloco de cobre) faz curvas.", "Cabo energizado da choque!",
+                "Alavanca no meio do cabo = disjuntor.", "Juncao (bloco de cobre) faz curvas.", "Cabo energizado da choque continuo:",
+                "armadura de ferro/ouro/cobre ate 2x,", "bota de couro metade e sem lentidao,", "Sola Isolante na bota: imune.",
                 "Poste: muro de pedregulho, madeira e", "cobre talhado no topo. Liga postes", "a ate " + (int) POLE_RANGE + " blocos sem fio.", "Torre ligada: " + upkeep(1) + "/s parada (sobe com", "o nivel) + " + (int) SHOT_COST + " por flecha, " + (int) FIREBALL_COST + " por fogo.",
                 "Geradores enchem as baterias da rede.", "Solar e CC: precisa de Inversor na rede.", "",
                 "Carvao: 4/s enquanto queima", "Geotermico: 0.5/s por lava (x2 no Nether)", "Solar: 1.5/s de dia, 0 a noite"));
@@ -728,7 +883,7 @@ final class Engineer implements Listener {
                 ItemMeta meta = it.getItemMeta();
                 meta.displayName(Component.text(c.getValue() + "x " + label(c.getKey()), has >= c.getValue() ? NamedTextColor.GREEN : NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
                 meta.lore(List.of(Component.text("Voce tem " + has, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                        Component.text("Feito na Fundicao Termica.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+                        Component.text(madeIn(c.getKey()), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
                 it.setItemMeta(meta);
                 inv.setItem(GRID[i++], it);
             }
@@ -764,7 +919,7 @@ final class Engineer implements Listener {
     @EventHandler
     public void onPanelDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof ClassPanel) e.setCancelled(true); }
 
-    private static String pretty(Material m) {
+    static String pretty(Material m) {
         String s = m.name().toLowerCase(Locale.ROOT).replace('_', ' ');
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
@@ -801,7 +956,7 @@ final class Engineer implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int raw = e.getRawSlot();
-        if (raw == 2 || raw == 4 || raw == 6) { p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f); openCatalog(p, (raw - 2) / 2); return; }
+        if (raw >= 1 && raw < 1 + TABS.length * 2 && raw % 2 == 1) { p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f); openCatalog(p, (raw - 1) / 2); return; }
         if (raw == 49) { openPanel(p); return; }
         String type = h.slots.get(raw);
         if (type == null) return;
@@ -821,7 +976,7 @@ final class Engineer implements Listener {
             }
         for (Map.Entry<String, Integer> c : r.parts().entrySet())
             if (countPart(p, c.getKey()) < c.getValue()) {
-                p.sendMessage(Component.text("Falta " + label(c.getKey()) + " (feito na Fundicao Termica).", NamedTextColor.RED));
+                p.sendMessage(Component.text("Falta " + label(c.getKey()) + ". " + madeIn(c.getKey()), NamedTextColor.RED));
                 p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
                 return false;
             }
@@ -880,8 +1035,11 @@ final class Engineer implements Listener {
             case "fundicao" -> Material.BLAST_FURNACE; case "fornalha" -> Material.SMOKER; case "triturador" -> Material.DROPPER;
             case "plantadeira" -> Material.BARREL; case "montadora" -> Material.CRAFTER; case "escudo" -> Material.LIGHTNING_ROD;
             case "mineradora" -> Material.HOPPER;
+            case "prensa" -> Material.PISTON; case "torno" -> Material.STONECUTTER; case "bobinadeira" -> Material.LOOM;
+            case "gravadora" -> Material.CARTOGRAPHY_TABLE; case "laminadora" -> Material.FLETCHING_TABLE; case "estacao" -> Material.OBSERVER;
             default -> Material.LODESTONE;
         };
+        if (d.type.equals("cadinho")) return b.getType().name().endsWith("CAULDRON"); // vazio, com lava (trabalhando) ou agua da chuva
         if (d.type.equals("forja")) return b.getType() == Material.FURNACE || b.getType() == Material.BLAST_FURNACE;
         return b.getType() == want;
     }
@@ -944,13 +1102,21 @@ final class Engineer implements Listener {
                             if (b.getBoundingBox().overlaps(bb)) { hit = b; break outer; }
                         }
             if (hit == null) continue;
-            if (now - lastShock.getOrDefault(p.getUniqueId(), 0L) < 1000) continue;
+            if (now - lastShock.getOrDefault(p.getUniqueId(), 0L) < SHOCK_MS) continue;
+            ItemStack boots = p.getInventory().getBoots();
+            if (insulated(boots)) continue; // Sola Isolante: nao passa corrente
             lastShock.put(p.getUniqueId(), now);
-            p.damage(2.0);
-            p.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1, false, true, true));
+            boolean leather = boots != null && boots.getType() == Material.LEATHER_BOOTS;
+            int metal = 0; // ferro, ouro, cobre e malha conduzem; diamante e netherita sao neutros
+            for (ItemStack ar : p.getInventory().getArmorContents())
+                if (ar != null && ar.getType().name().matches("(IRON|GOLDEN|COPPER|CHAINMAIL)_.*")) metal++;
+            double dmg = SHOCK_DMG * (1 + 0.25 * metal) * (leather ? 0.5 : 1);
+            p.setNoDamageTicks(0); // dano continuo enquanto encostar, sem a janela de invulnerabilidade
+            p.damage(dmg);
+            if (!leather) p.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 30, 1, false, true, true));
             p.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, p.getLocation().add(0, 1, 0), 12, 0.3, 0.5, 0.3, 0.05);
             p.playSound(p.getLocation(), Sound.BLOCK_COPPER_BULB_TURN_ON, 0.6f, 2f);
-            p.sendActionBar(Component.text("⚡ Choque! Cabo energizado.", NamedTextColor.YELLOW, TextDecoration.BOLD));
+            p.sendActionBar(Component.text("⚡ Choque! Cabo energizado." + (metal > 0 ? " Armadura de metal conduz (+" + 25 * metal + "%)." : leather ? " Bota de couro segura metade." : ""), NamedTextColor.YELLOW, TextDecoration.BOLD));
         }
     }
 
@@ -1049,6 +1215,7 @@ final class Engineer implements Listener {
         Pole pl = poles.get(key(w.getName(), c[0], c[1], c[2]));
         if (pl != null && validPole(w, pl))
             for (Pole o : linkedPoles(pl)) out.add(new int[]{o.x, o.top, o.z});
+        tunnel.link(w, c, out);
         return out;
     }
 
@@ -1243,6 +1410,13 @@ final class Engineer implements Listener {
         // torres ligadas pagam manutencao todo segundo; sem pagar, ficam desligadas
         powerTicks++;
         for (Device f : devices.values()) if (MACHINES.contains(f.type)) tickMachine(f);
+        // maquina de processo cujo bloco sumiu por fora: solta o que tinha dentro e esquece
+        for (Device o : orphans) {
+            World ow = Bukkit.getWorld(o.world);
+            if (ow != null) { if (o.type.equals("estacao")) tunnel.drop(o, o.center(ow)); else factory.drop(o, o.center(ow)); }
+            devices.remove(o.key()); removeTag(o); invalidate();
+        }
+        orphans.clear();
         for (Device t : devices.values()) {
             if (!t.type.equals("torre")) continue;
             World w = Bukkit.getWorld(t.world);
@@ -1318,7 +1492,7 @@ final class Engineer implements Listener {
     private final Random rnd = new Random();
 
     /** Gasta energia da rede para trabalhar este segundo; false = sem energia. */
-    private boolean work(Device d, double rate) {
+    boolean work(Device d, double rate) {
         if (!drain(d, rate, powerTicks % 3 == 0)) { d.status = "sem energia"; return false; }
         d.lastRate = rate;
         d.status = "";
@@ -1329,7 +1503,7 @@ final class Engineer implements Listener {
         if (b.getState() instanceof org.bukkit.block.Furnace f && f.getBurnTime() < 30) { f.setBurnTime((short) 40); f.update(true, false); }
     }
 
-    private static Inventory containerAt(Block b) { return b.getState() instanceof Container c ? c.getInventory() : null; }
+    static Inventory containerAt(Block b) { return b.getState() instanceof Container c ? c.getInventory() : null; }
 
     /** Cabe o item inteiro no inventario? */
     private static boolean fits(Inventory inv, ItemStack it) {
@@ -1351,6 +1525,8 @@ final class Engineer implements Listener {
         World w = Bukkit.getWorld(d.world);
         if (!loaded(d, w)) return;
         Block b = w.getBlockAt(d.x, d.y, d.z);
+        if (Factory.TYPES.contains(d.type)) { if (valid(d, b)) factory.tick(d, b); else orphans.add(d); return; }
+        if (d.type.equals("estacao")) { if (valid(d, b)) tunnel.tick(d, b); else orphans.add(d); return; }
         if (!valid(d, b)) return;
         if (!d.enabled) { d.status = "desligada"; d.powered = false; return; }
         switch (d.type) {
@@ -1544,7 +1720,7 @@ final class Engineer implements Listener {
         if (d != null && d.type.equals("triturador") && crushable(e.getItem())) e.setCancelled(true);
     }
 
-    private static Material cropFor(Material seed) {
+    static Material cropFor(Material seed) {
         return switch (seed) {
             case WHEAT_SEEDS -> Material.WHEAT; case BEETROOT_SEEDS -> Material.BEETROOTS; case CARROT -> Material.CARROTS;
             case POTATO -> Material.POTATOES; case MELON_SEEDS -> Material.MELON_STEM; case PUMPKIN_SEEDS -> Material.PUMPKIN_STEM;
@@ -1650,7 +1826,17 @@ final class Engineer implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onCrafter(CrafterCraftEvent e) { if (at(e.getBlock()) != null) e.setCancelled(true); }
 
-    private boolean mineSkip(Block t) {
+    boolean hasCable(String key) { return cables.contains(key); }
+
+    void addCable(Block b) { cables.add(key(b.getWorld().getName(), b.getX(), b.getY(), b.getZ())); invalidate(); }
+
+    /** Bloco que maquina nenhuma pode destruir ou trocar: dispositivo, cabo, poste ou bau. */
+    boolean isProtected(Block t) {
+        String k = key(t.getWorld().getName(), t.getX(), t.getY(), t.getZ());
+        return devices.containsKey(k) || cables.contains(k) || poleBlocks.containsKey(k) || t.getState() instanceof Container;
+    }
+
+    boolean mineSkip(Block t) {
         Material m = t.getType();
         if (m.isAir() || t.isLiquid() || m == Material.BEDROCK || m == Material.SPAWNER || m == Material.END_PORTAL_FRAME
                 || m == Material.REINFORCED_DEEPSLATE || m == Material.END_PORTAL || m == Material.NETHER_PORTAL || m.getHardness() < 0) return true;
@@ -1717,7 +1903,7 @@ final class Engineer implements Listener {
     }
 
     /** Fontes que podem pagar um tiro: geradores CA primeiro, depois baterias que fornecem. */
-    private List<Device> sourcesFor(Device t) {
+    List<Device> sourcesFor(Device t) {
         List<Device> out = new ArrayList<>();
         for (Device d : net(t).devs) {
             if (acGenerator(d)) out.add(d);
@@ -1750,7 +1936,7 @@ final class Engineer implements Listener {
         return true;
     }
 
-    private String netSummary(Net n) {
+    String netSummary(Net n) {
         int gen = n.count("carvao") + n.count("geotermico");
         return gen + " geradores, " + n.count("solar") + " paineis, " + n.count("inversor") + " inversores, "
                 + n.count("bateria") + " baterias, " + n.count("torre") + " torres";
@@ -1827,7 +2013,7 @@ final class Engineer implements Listener {
         p.openInventory(inv);
     }
 
-    private void showNet(Player p, Device d) {
+    void showNet(Player p, Device d) {
         Net n = net(d);
         List<double[]> pts = new ArrayList<>(n.wires);
         for (int[] c : n.nodes) pts.add(new double[]{c[0] + 0.5, c[1] + 0.5, c[2] + 0.5});
@@ -2124,13 +2310,16 @@ final class Engineer implements Listener {
         NamedTextColor g = NamedTextColor.GRAY;
         switch (d.type) {
             case "bancada" -> { return name; }
-            case "fundicao", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora" -> {
+            case "fundicao", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora",
+                 "prensa", "torno", "bobinadeira", "cadinho", "gravadora", "laminadora", "estacao" -> {
                 boolean on = d.lastRate > 0 || (d.type.equals("escudo") && d.powered);
                 Component st = !d.enabled ? Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD)
                         : on ? Component.text("trabalhando", NamedTextColor.GREEN)
                         : Component.text(d.status.isEmpty() ? "parada" : d.status, NamedTextColor.RED);
                 Component out = name.append(nl).append(st);
                 if (d.type.equals("montadora")) out = out.append(nl).append(Component.text("fazendo: " + label(d.sel), g));
+                if (on && Factory.TYPES.contains(d.type)) out = out.append(nl).append(Component.text(factory.progress(d), g));
+                if (d.type.equals("estacao")) out = out.append(nl).append(Component.text(tunnel.tagLine(d), g));
                 if (d.type.equals("mineradora")) out = out.append(nl).append(Component.text("y=" + (d.y - 1 - d.cursor / ((MINE_R * 2 + 1) * (MINE_R * 2 + 1))), g));
                 if (d.type.equals("fundicao")) out = out.append(nl).append(Component.text("combustivel " + (int) d.energy + "s", g));
                 else if (net(d).devs.size() <= 1) out = out.append(nl).append(Component.text("sem cabo", NamedTextColor.RED));
@@ -2466,6 +2655,10 @@ final class Engineer implements Listener {
                 d.cursor = c.getInt("cursor");
                 d.sel = c.getString("sel", "cabo");
                 devices.put(d.key(), d);
+                if (d.type.equals("estacao")) tunnel.load(d, c);
+                ConfigurationSection inv = c.getConfigurationSection("inv");
+                if (inv != null && Factory.TYPES.contains(d.type))
+                    for (String sk : inv.getKeys(false)) factory.restore(d, Integer.parseInt(sk.substring(1)), inv.getItemStack(sk));
             } catch (Exception ex) { plugin.getLogger().warning("device " + k + ": " + ex.getMessage()); }
         }
     }
@@ -2483,6 +2676,11 @@ final class Engineer implements Listener {
             y.set(k + ".tag", d.tagOn); y.set(k + ".on", d.enabled); y.set(k + ".mode", d.mode);
             if (d.type.equals("mineradora")) y.set(k + ".cursor", d.cursor);
             if (d.type.equals("montadora")) y.set(k + ".sel", d.sel);
+            if (d.type.equals("estacao")) tunnel.save(d, y, k);
+            if (Factory.TYPES.contains(d.type)) {
+                y.set(k + ".sel", d.sel);
+                for (Map.Entry<Integer, ItemStack> en : factory.contents(d).entrySet()) y.set(k + ".inv.s" + en.getKey(), en.getValue());
+            }
             if (d.type.equals("torre")) {
                 y.set(k + ".filter", d.filter);
                 y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);

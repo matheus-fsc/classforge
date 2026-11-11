@@ -1,11 +1,11 @@
 name: HardcoreRouletteClasses
-version: 0.7.2
+version: 0.9.0
 main: dev.math.bclasses.BabylonClasses
 api-version: "26.3"
-description: Habilidades por nivel (Engenharia) para o BABYLON FLAMES.
+description: Habilidades por nivel (Engenharia, Exploracao, Plantacao) para o BABYLON FLAMES.
 softdepend: [HardcoreRoulette, AuraSkills]
 commands:
   classe:
     description: Abre o painel de Engenharia
-    usage: /classe [info|particulas|admin <jogador> <nivel> [exploracao]|dar <item>|give <engenheiro|explorador> [jogador]]
+    usage: /classe [info|particulas|admin <jogador> <nivel> [exploracao|plantacao]|dar <item>|give <engenheiro|explorador|plantador> [jogador]]
     aliases: [classes, class, engenharia, habilidades]

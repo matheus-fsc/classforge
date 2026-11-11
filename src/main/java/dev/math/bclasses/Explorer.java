@@ -52,6 +52,8 @@ final class Explorer implements Listener {
     static final int BLOCKS_PER_LEVEL = 150;                   // custo em niveis de XP por distancia
     static final long TP_COOLDOWN_MS = 120_000;
     static final int CHANNEL_TICKS = 60;
+    /** Bonus (%) no XP vanilla coletado em orbes, por nivel. Teto baixo de proposito. */
+    static final int[] XP_BONUS = {4, 8, 12, 16, 20};
 
     enum Kind {
         LOBO("Lobo", Material.BONE_BLOCK, Material.BONE, NamedTextColor.GRAY),
@@ -138,12 +140,14 @@ final class Explorer implements Listener {
         if (lvl >= ANCHOR_LEVEL) s += ", Ancora de Perola (alcance " + RANGE[lvl - 1] + ")";
         s += ", mochila da raposa " + packSize(lvl);
         if (lvl >= 4) s += ", uivo do lobo";
+        s += ", +" + XP_BONUS[lvl - 1] + "% de XP dos orbes";
         return s;
     }
 
     /** Nova vida: zera chunks, pet, mochila e ancoras. */
     void resetLife(UUID id) {
         PetData d = data.remove(id);
+        xpFrac.remove(id);
         if (d != null && d.pet != null) { Entity e = Bukkit.getEntity(d.pet); if (e != null) e.remove(); }
         anchors.values().removeIf(a -> a.owner.equals(id));
     }
@@ -159,6 +163,23 @@ final class Explorer implements Listener {
         if (!BabylonClasses.isRunWorld(t.getWorld())) return;
         String k = t.getWorld().getName() + ":" + (t.getBlockX() >> 4) + ":" + (t.getBlockZ() >> 4);
         if (pd(p.getUniqueId()).chunks.add(k)) plugin.addExp(p.getUniqueId(), 1);
+    }
+
+    // ---------- bonus de XP vanilla ----------
+
+    private final Map<UUID, Double> xpFrac = new HashMap<>();
+
+    /** Orbes de XP rendem um pouco mais conforme o nivel de Exploracao (a sobra fracionada acumula). */
+    @EventHandler(ignoreCancelled = true)
+    public void onXpOrb(org.bukkit.event.player.PlayerExpChangeEvent e) {
+        if (e.getAmount() <= 0) return;
+        Player p = e.getPlayer();
+        if (!BabylonClasses.isRunWorld(p.getWorld())) return;
+        UUID id = p.getUniqueId();
+        double v = xpFrac.getOrDefault(id, 0.0) + e.getAmount() * XP_BONUS[level(id) - 1] / 100.0;
+        int whole = (int) v;
+        xpFrac.put(id, v - whole);
+        if (whole > 0) e.setAmount(e.getAmount() + whole);
     }
 
     // ---------- bonus de carne ----------
@@ -746,7 +767,8 @@ final class Explorer implements Listener {
         String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.EXP_XP[lvl] + " para o nivel " + (lvl + 1);
         inv.setItem(4, icon(Material.COMPASS, "Exploracao - nivel " + lvl, NamedTextColor.AQUA, List.of(
                 next, "Chunks visitados nesta vida: " + d.chunks.size(), "", "+1 XP por chunk novo (mundo da run).",
-                "Carne da +" + String.format(Locale.ROOT, "%.1f", 0.6 * lvl) + " de saturacao extra.", "", "O nivel zera quando a vida acaba.")));
+                "Carne da +" + String.format(Locale.ROOT, "%.1f", 0.6 * lvl) + " de saturacao extra.",
+                "Orbes de XP rendem +" + XP_BONUS[lvl - 1] + "% (maximo " + XP_BONUS[4] + "%).", "", "O nivel zera quando a vida acaba.")));
         inv.setItem(6, icon(Material.EXPERIENCE_BOTTLE, "Como ganhar XP", NamedTextColor.GREEN, List.of(
                 "+1 XP por chunk novo que voce pisa", "  no mundo da run (cada chunk conta", "  uma vez por vida).",
                 "+ Nether e End contam separado", "  do mundo normal.", "",
@@ -803,6 +825,7 @@ final class Explorer implements Listener {
             lore.add("");
             lore.add("+ Pet mais forte, carne +" + String.format(Locale.ROOT, "%.1f", 0.6 * L));
             lore.add("+ Mochila da raposa: " + packSize(L) + " espacos");
+            lore.add("+ XP dos orbes: +" + XP_BONUS[i] + "%");
             if (L == 1) lore.add("+ Ritual do companheiro");
             if (L == 2) lore.add("+ Ancora de Perola (500 blocos)");
             if (L == 3) lore.add("+ Alcance 1000");
