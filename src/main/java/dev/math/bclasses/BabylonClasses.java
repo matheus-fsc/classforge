@@ -124,7 +124,43 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         return levelFor(d == null ? 0 : d.farm, FARM_XP);
     }
 
+    // ---------- XP de classe compartilhado com a party (regras de alcance do HardcoreRoulette) ----------
+
+    private boolean sharing;
+    private final Map<String, Double> shareFrac = new HashMap<>();
+
+    /** Repassa parte do XP para os membros da party no alcance (mesma fracao do XP do AuraSkills). */
+    @SuppressWarnings("unchecked")
+    private void share(UUID from, int amount, int kind) {
+        if (sharing || amount <= 0) return;
+        Player p = Bukkit.getPlayer(from);
+        var hr = Bukkit.getPluginManager().getPlugin("HardcoreRoulette");
+        if (p == null || hr == null || !hr.isEnabled()) return;
+        List<Player> to; double ratio;
+        try {
+            to = (List<Player>) hr.getClass().getMethod("xpShareTargets", Player.class).invoke(hr, p);
+            ratio = (Double) hr.getClass().getMethod("xpShareRatio").invoke(hr);
+        } catch (Throwable t) { return; }
+        if (to.isEmpty() || ratio <= 0) return;
+        sharing = true;
+        try {
+            for (Player o : to) {
+                String k = o.getUniqueId() + ":" + kind;
+                double v = shareFrac.getOrDefault(k, 0.0) + amount * ratio;
+                int whole = (int) v;
+                shareFrac.put(k, v - whole);
+                if (whole <= 0) continue;
+                switch (kind) {
+                    case 0 -> addXp(o.getUniqueId(), whole);
+                    case 1 -> addExp(o.getUniqueId(), whole);
+                    default -> addFarm(o.getUniqueId(), whole);
+                }
+            }
+        } finally { sharing = false; }
+    }
+
     void addFarm(UUID id, int amount) {
+        share(id, amount, 2);
         PData d = data(id);
         Player p = Bukkit.getPlayer(id);
         if (d.world == null && p != null && isRunWorld(p.getWorld())) d.world = baseOf(p.getWorld().getName());
@@ -139,6 +175,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     }
 
     void addExp(UUID id, int amount) {
+        share(id, amount, 1);
         PData d = data(id);
         Player p = Bukkit.getPlayer(id);
         if (d.world == null && p != null && isRunWorld(p.getWorld())) d.world = baseOf(p.getWorld().getName());
@@ -153,6 +190,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     }
 
     void addXp(UUID id, int amount) {
+        share(id, amount, 0);
         PData d = data(id);
         Player p = Bukkit.getPlayer(id);
         if (d.world == null && p != null && isRunWorld(p.getWorld())) d.world = baseOf(p.getWorld().getName());
