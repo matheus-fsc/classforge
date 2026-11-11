@@ -258,7 +258,7 @@ final class Engineer implements Listener {
             case "bala_ferro" -> { mat = Material.IRON_NUGGET; name = "Bala de Ferro"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", IRON_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) IRON_COST + " energia por bala", "e 2 de cano por rajada."); }
             case "bala_cobre" -> { mat = Material.COPPER_NUGGET; name = "Bala de Cobre"; lore = List.of("Municao da Torre Sentinela.", "Rajada de " + BURST + " tiros retos,", COPPER_DMG + " de dano cada (flecha ~6).", "Gasta " + (int) COPPER_COST + " energia por bala", "e 1 de cano por rajada."); }
             case "fornalha" -> { mat = Material.SMOKER; name = "Fornalha Eletrica"; lore = List.of("Derrete qualquer coisa da fornalha comum", "2x mais rapido, sem combustivel.", "Gasta " + (int) SMELT_RATE + " energia/s (" + (int) (SMELT_RATE * SMELT_TIME) + " por item).", "Funil em cima abastece, embaixo retira."); }
-            case "triturador" -> { mat = Material.DROPPER; name = "Triturador"; lore = List.of("Minerio bruto vira triturado, com", (int) (CRUSH_BONUS * 100) + "% de chance de render 1 a mais.", "Triturado derrete como o minerio normal.", "Pedregulho vira cascalho, cascalho vira areia.", "Gasta " + (int) CRUSH_RATE + " energia/s. Saida: bau embaixo", "ou no proprio inventario."); }
+            case "triturador" -> { mat = Material.DROPPER; name = "Triturador"; lore = List.of("Minerio bruto vira triturado, com", (int) (CRUSH_BONUS * 100) + "% de chance de render 1 a mais.", "Triturado derrete como o minerio normal.", "Pedregulho vira cascalho, cascalho vira", "2 pederneiras (flint), as vezes 3.", "Gasta " + (int) CRUSH_RATE + " energia/s. Saida: bau embaixo", "ou no proprio inventario."); }
             case "plantadeira" -> { mat = Material.BARREL; name = "Plantadeira"; lore = List.of("Planta as sementes guardadas nela", "na terra arada em volta (raio 4 a 6).", "Fungo do Nether vai na areia das almas.", (int) PLANT_COST + " energia por semente."); }
             case "montadora" -> { mat = Material.CRAFTER; name = "Montadora"; lore = List.of("Monta sozinha um item da Engenharia.", "Materiais: dentro dela ou no bau em cima.", "Resultado: bau ou funil embaixo.", "Gasta " + (int) ASSEMBLE_RATE + " energia/s, " + ASSEMBLE_TIME + "s por item."); }
             case "escudo" -> { mat = Material.LIGHTNING_ROD; name = "Escudo Eletrico"; lore = List.of("Empurra mobs hostis para longe", "com descargas (raio 5, nivel 5: 6).", "Gasta " + (int) SHIELD_UPKEEP + "/s ligado e " + (int) SHIELD_PUSH + " por mob."); }
@@ -1677,7 +1677,7 @@ final class Engineer implements Listener {
             case RAW_COPPER -> new Object[]{Material.RAW_COPPER, 1, true};
             case COPPER_ORE, DEEPSLATE_COPPER_ORE -> new Object[]{Material.RAW_COPPER, 3, true};
             case COBBLESTONE -> new Object[]{Material.GRAVEL, 1, false};
-            case GRAVEL -> new Object[]{Material.SAND, 1, false};
+            case GRAVEL -> new Object[]{Material.FLINT, 2, false}; // farm de flecha
             default -> null;
         };
     }
@@ -1704,7 +1704,7 @@ final class Engineer implements Listener {
         if (!crushable(in)) return;
         in.setAmount(in.getAmount() - 1);
         own.setItem(slot, in.getAmount() > 0 ? in : null);
-        int n = (Integer) spec[1] + ((Boolean) spec[2] && rnd.nextDouble() < CRUSH_BONUS ? 1 : 0);
+        int n = (Integer) spec[1] + (((Boolean) spec[2] || spec[0] == Material.FLINT) && rnd.nextDouble() < CRUSH_BONUS ? 1 : 0);
         ItemStack out = (Boolean) spec[2] ? crushed((Material) spec[0], n) : new ItemStack((Material) spec[0], n);
         for (ItemStack left : dest.addItem(out).values()) b.getWorld().dropItemNaturally(c.clone().add(0, 0.6, 0), left);
         b.getWorld().spawnParticle(Particle.BLOCK, c.clone().add(0, 0.6, 0), 10, 0.2, 0.1, 0.2, Material.STONE.createBlockData());

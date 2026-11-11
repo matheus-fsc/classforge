@@ -808,8 +808,7 @@ final class Explorer implements Listener {
         inv.setItem(16, icon(Material.LEAD, "Seu companheiro", NamedTextColor.WHITE, st));
 
         List<Anchor> mine = anchorsOf(id);
-        List<String> al = new ArrayList<>(List.of("Receita (mesa de trabalho):", "  _ P _", "  O B O", "  O O O",
-                "P = perola do End, B = bussola,", "O = obsidiana", "",
+        List<String> al = new ArrayList<>(List.of("Clique para ver a receita.", "",
                 "Duas ancoras se ligam sozinhas.", "Clique numa com perola na mao:", "3 s parado (dano cancela).",
                 "Custo: 1 perola + 1 nivel a cada " + BLOCKS_PER_LEVEL, "blocos. Recarga 2 min. Mesma dimensao.", ""));
         if (lvl < ANCHOR_LEVEL) al.add("! Libera no nivel " + ANCHOR_LEVEL);
@@ -848,7 +847,9 @@ final class Explorer implements Listener {
     public void onPanelClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof Panel)) return;
         e.setCancelled(true);
-        if (e.getWhoClicked() instanceof Player p && e.getClickedInventory() == e.getInventory() && e.getRawSlot() == 36) plugin.openHub(p);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (e.getRawSlot() == 36) plugin.openHub(p);
+        else if (e.getRawSlot() == 22) RecipeGrid.open(p, recipeKey, "Ancora de Perola", this::openPanel);
     }
 
     @EventHandler

@@ -368,8 +368,7 @@ final class Farmer implements Listener {
                 "+ Colher plantacao madura (trigo, cenoura,", "  batata, beterraba, fungo do Nether):", "  +1 a cada 4",
                 "+ Cada semente que um plantador seu", "  planta: +1 a cada 10", "", "So conta no mundo da run.")));
         inv.setItem(11, icon(Material.CARVED_PUMPKIN, "Plantador de Cobre", NamedTextColor.GOLD, List.of(
-                "Receita (mesa de trabalho):", "  _ A _", "  S C S", "  _ E _",
-                "A = abobora esculpida, C = bloco de cobre,", "S = sementes de trigo, E = enxada de ferro", "",
+                "Clique para ver a receita.", "",
                 "Clique com ele num bau ou barril:", "nasce um golem de cobre que pega as", "sementes do bau e planta na terra",
                 "arada em volta (fungo do Nether na", "areia das almas).", "Agachado + clique no golem: recolhe.", "Se morrer, solta o item de volta.")));
         inv.setItem(13, icon(Material.WATER_BUCKET, "Colheita", NamedTextColor.AQUA, List.of(
@@ -399,7 +398,9 @@ final class Farmer implements Listener {
     public void onPanelClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof Panel)) return;
         e.setCancelled(true);
-        if (e.getWhoClicked() instanceof Player p && e.getClickedInventory() == e.getInventory() && e.getRawSlot() == 36) plugin.openHub(p);
+        if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (e.getRawSlot() == 36) plugin.openHub(p);
+        else if (e.getRawSlot() == 11) RecipeGrid.open(p, recipeKey, "Plantador de Cobre", this::openPanel);
     }
 
     @EventHandler

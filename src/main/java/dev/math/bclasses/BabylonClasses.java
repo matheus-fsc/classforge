@@ -61,6 +61,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         explorer.enable();
         farmer = new Farmer(this);
         farmer.enable();
+        RecipeGrid.register(this);
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getScheduler().runTaskTimer(this, this::savePlayers, 1200L, 1200L);
         for (Player p : Bukkit.getOnlinePlayers()) checkLife(p);
