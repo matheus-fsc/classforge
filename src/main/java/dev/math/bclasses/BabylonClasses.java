@@ -49,6 +49,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     Engineer engineer;
     Explorer explorer;
     Farmer farmer;
+    Relics relics;
 
     @Override
     public void onEnable() {
@@ -62,6 +63,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
         farmer = new Farmer(this);
         farmer.enable();
         RecipeGrid.register(this);
+        relics = new Relics(this);
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getScheduler().runTaskTimer(this, this::savePlayers, 1200L, 1200L);
         for (Player p : Bukkit.getOnlinePlayers()) checkLife(p);
@@ -298,7 +300,9 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
                 ItemStack pl = farmer.planterItem(); pl.setAmount(4); items.add(pl);
                 items.add(new ItemStack(Material.WHEAT_SEEDS, 64));
                 items.add(new ItemStack(Material.IRON_HOE));
-            } else { s.sendMessage("Use: /classe give <engenheiro|explorador|plantador> [jogador]"); return true; }
+            } else if (which.startsWith("livro")) {
+                for (Relics.Relic r : Relics.RELICS) items.add(relics.book(r.id(), r.max()));
+            } else { s.sendMessage("Use: /classe give <engenheiro|explorador|plantador|livros> [jogador]"); return true; }
             for (ItemStack left : t.getInventory().addItem(items.toArray(new ItemStack[0])).values()) t.getWorld().dropItemNaturally(t.getLocation(), left);
             s.sendMessage("Itens de " + (which.startsWith("eng") ? "Engenharia" : which.startsWith("exp") ? "Exploracao" : "Plantacao") + " entregues para " + t.getName() + ".");
             return true;
@@ -390,7 +394,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }
-        if (a.length == 2 && a[0].equalsIgnoreCase("give")) return List.of("engenheiro", "explorador", "plantador");
+        if (a.length == 2 && a[0].equalsIgnoreCase("give")) return List.of("engenheiro", "explorador", "plantador", "livros");
         if (a.length == 4 && a[0].equalsIgnoreCase("admin")) return List.of("engenharia", "exploracao", "plantacao");
         return null;
     }

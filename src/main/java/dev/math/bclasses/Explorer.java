@@ -814,6 +814,13 @@ final class Explorer implements Listener {
         if (lvl < ANCHOR_LEVEL) al.add("! Libera no nivel " + ANCHOR_LEVEL);
         else al.add("+ Alcance " + RANGE[lvl - 1] + " blocos. Colocadas: " + mine.size() + "/2");
         inv.setItem(22, icon(Material.CRYING_OBSIDIAN, "Ancora de Perola", NamedTextColor.LIGHT_PURPLE, al));
+        List<String> bl = new ArrayList<>(List.of(
+                "Baus de estrutura gerados pelo mapa", "(dungeons, tavernas, ruinas...) podem",
+                "ter um Livro Antigo quando VOCE abre", "pela primeira vez.",
+                "Chance agora: " + Math.round(Relics.findChance(lvl) * 100) + "% por bau (sobe com o nivel).", ""));
+        for (Relics.Relic r : Relics.RELICS) bl.add("+ " + r.name() + " (" + r.target() + ")");
+        bl.add(""); bl.add("Pegue o livro e clique com ele"); bl.add("sobre o item no inventario.");
+        inv.setItem(24, icon(Material.ENCHANTED_BOOK, "Livros Antigos", NamedTextColor.LIGHT_PURPLE, bl));
 
         Material[] mats = {Material.LEATHER_BOOTS, Material.CHAINMAIL_BOOTS, Material.IRON_BOOTS, Material.DIAMOND_BOOTS, Material.NETHERITE_BOOTS};
         for (int i = 0; i < 5; i++) {
