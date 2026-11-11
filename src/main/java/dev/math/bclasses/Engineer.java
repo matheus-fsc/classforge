@@ -42,7 +42,7 @@ final class Engineer implements Listener {
             "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora", "ferro_industrial", "fundicao", "cobre_industrial",
             "prensa", "torno", "bobinadeira", "cadinho", "gravadora",
             "chapa_ferro", "chapa_cobre", "chapa_aco", "fio_cobre", "engrenagem", "bobina", "aco", "liga", "circuito", "processador", "motor",
-            "laminadora", "estacao", "trem", "broca", "modulo_coleta", "modulo_isolante"};
+            "laminadora", "estacao", "trem", "broca", "modulo_coleta", "modulo_isolante", "torre_laser"};
 
     /** Equipamentos que nao sao blocos: entram em espacos de maquina ou na armadura. */
     static final Set<String> GEAR = Set.of("trem", "broca", "modulo_coleta", "modulo_isolante");
@@ -54,7 +54,7 @@ final class Engineer implements Listener {
     static final String[] TABS = {"Defesa", "Energia", "Maquinas", "Componentes"};
     static int tabOf(String type) {
         return switch (type) {
-            case "torre", "cano", "escudo", "bala_ferro", "bala_cobre", "modulo_isolante" -> 0;
+            case "torre", "torre_laser", "cano", "escudo", "bala_ferro", "bala_cobre", "modulo_isolante" -> 0;
             case "carvao", "geotermico", "solar", "inversor", "bateria", "cabo", "juncao" -> 1;
             default -> COMPONENTS.contains(type) || type.equals("triturado") ? 3 : 2;
         };
@@ -87,7 +87,7 @@ final class Engineer implements Listener {
     static final int XP_REPAIR = 8, XP_KILL = 2, XP_MECH = 2, XP_ANVIL = 4;
     static final double XP_INDUSTRIAL = 2, XP_INGOT = 0.2, XP_MACHINE_ITEM = 0.25, XP_FORGE = 1;
     static int xpFor(String type) {
-        return switch (type) { case "cabo", "juncao" -> 2; case "cano" -> 4; case "torre", "fundicao" -> 10; default -> MACHINES.contains(type) ? 12 : 6; };
+        return switch (type) { case "cabo", "juncao" -> 2; case "cano" -> 4; case "torre", "fundicao" -> 10; case "torre_laser" -> 16; default -> MACHINES.contains(type) ? 12 : 6; };
     }
     /** Forja: energia por segundo enquanto trabalha, segundos por lote (9 pepitas viram 16 balas). */
     static final double FORGE_RATE = 4;
@@ -165,7 +165,8 @@ final class Engineer implements Listener {
         this.insulKey = new NamespacedKey(plugin, "sola-isolante");
         // Fundicao Termica: sem energia, unica receita so com itens vanilla (comeco da cadeia industrial)
         recipes.add(new Recipe("fundicao", 1, costs(Material.BLAST_FURNACE, 1, Material.IRON_BLOCK, 2, Material.COPPER_BLOCK, 2, Material.MAGMA_BLOCK, 2)));
-        recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.CROSSBOW, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 4)));
+        recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.CROSSBOW, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "motor", 1, "circuito", 1)));
+        recipes.add(new Recipe("torre_laser", 4, costs(Material.DISPENSER, 1, Material.TNT, 4, Material.REDSTONE_BLOCK, 2), 1, parts("chapa_aco", 4, "motor", 2, "processador", 1)));
         recipes.add(new Recipe("cano", 1, costs(), 1, parts("ferro_industrial", 2, "cobre_industrial", 1)));
         recipes.add(new Recipe("carvao", 1, costs(Material.FURNACE, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "cobre_industrial", 1)));
         recipes.add(new Recipe("solar", 1, costs(Material.DAYLIGHT_DETECTOR, 1, Material.GLASS, 2, Material.REDSTONE_BLOCK, 1), 1, parts("cobre_industrial", 2)));
@@ -246,6 +247,7 @@ final class Engineer implements Listener {
         Material mat; String name; List<String> lore;
         switch (type) {
             case "bancada" -> { mat = Material.SMITHING_TABLE; name = "Bancada de Engenharia"; lore = List.of("Clique com o direito para montar dispositivos."); }
+            case "torre_laser" -> { mat = Material.DISPENSER; name = "Torre Laser"; lore = List.of("Mira com laser e lanca TNT nos mobs.", "O TNT nao explode: so da dano em area", "(" + (int) LASER_DMG + "+ no centro, raio " + LASER_RADIUS + "), sem quebrar blocos.", "Municao: TNT dentro dela. " + (int) LASER_COST + " energia por tiro.", "Conta no limite de torres. Ligue com cabos."); }
             case "torre" -> { mat = Material.DISPENSER; name = "Torre Sentinela"; lore = List.of("Atira flechas ou bolas de fogo guardadas nela", "em mobs hostis. Ligada, consome " + upkeep(1) + "/s", "mesmo parada; cada flecha gasta mais " + (int) SHOT_COST + ",", "bola de fogo " + (int) FIREBALL_COST + ". Ligue com cabos."); }
             case "carvao" -> { mat = Material.FURNACE; name = "Gerador a Carvao"; lore = List.of("Coloque carvao no espaco de combustivel.", "Funil pela lateral tambem abastece.", "4 energia/s enquanto queima."); }
             case "geotermico" -> { mat = Material.MAGMA_BLOCK; name = "Gerador Geotermico"; lore = List.of("0.5 energia/s por fonte de lava encostada.", "Dobro no Nether. Nunca para."); }
@@ -324,7 +326,7 @@ final class Engineer implements Listener {
 
     static String label(String type) {
         return switch (type) {
-            case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "carvao" -> "Gerador a Carvao";
+            case "bancada" -> "Bancada de Engenharia"; case "torre" -> "Torre Sentinela"; case "torre_laser" -> "Torre Laser"; case "carvao" -> "Gerador a Carvao";
             case "geotermico" -> "Gerador Geotermico"; case "solar" -> "Painel Solar"; case "bateria" -> "Bateria";
             case "inversor" -> "Inversor CC/CA"; case "cabo" -> "Cabo de Energia"; case "juncao" -> "Juncao de Cabo"; case "cano" -> "Cano da Torre";
             case "forja" -> "Forja de Municao"; case "bala_ferro" -> "Bala de Ferro"; case "bala_cobre" -> "Bala de Cobre";
@@ -418,7 +420,7 @@ final class Engineer implements Listener {
         String base = BabylonClasses.baseOf(world);
         return devices.values().stream().filter(d -> d.owner.equals(owner)
                 && BabylonClasses.baseOf(d.world).equals(base)
-                && (turrets ? d.type.equals("torre") : d.isSource())).count();
+                && (turrets ? isTurret(d.type) : d.isSource())).count();
     }
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
@@ -435,7 +437,7 @@ final class Engineer implements Listener {
         if (type.equals("cano") || type.startsWith("bala") || COMPONENTS.contains(type) || GEAR.contains(type) || type.equals("triturado")) { e.setCancelled(true); return; }
         Block b = e.getBlockPlaced();
         int lvl = plugin.level(p.getUniqueId());
-        if (type.equals("torre") && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
+        if (isTurret(type) && count(p.getUniqueId(), b.getWorld().getName(), true) >= MAX_TURRETS[lvl - 1]) {
             e.setCancelled(true);
             p.sendMessage(Component.text("Limite de " + MAX_TURRETS[lvl - 1] + " torres no nivel " + lvl + ".", NamedTextColor.RED));
             return;
@@ -461,6 +463,7 @@ final class Engineer implements Listener {
         p.sendMessage(Component.text("⚙ " + label(type) + " instalado.", NamedTextColor.GOLD));
         if (type.equals("estacao")) tunnel.placed(d, b, p);
         if (type.equals("torre")) p.sendMessage(Component.text("Coloque flechas ou bolas de fogo dentro dela e ligue com cabo num gerador ou bateria.", NamedTextColor.GRAY));
+        if (type.equals("torre_laser")) p.sendMessage(Component.text("Coloque TNT dentro dela e ligue com cabo num gerador ou bateria.", NamedTextColor.GRAY));
         if (type.equals("solar")) p.sendMessage(Component.text("Painel solar gera CC: ligue um Inversor na mesma rede.", NamedTextColor.GRAY));
         if (type.equals("fundicao")) p.sendMessage(Component.text("Bloco de ferro/cobre em cima, bloco de carvao ou balde de lava no combustivel.", NamedTextColor.GRAY));
         else if (Factory.TYPES.contains(type)) p.sendMessage(Component.text("Ligue com cabo numa rede com energia e clique para abrir a interface. Bau em cima abastece, bau embaixo recebe.", NamedTextColor.GRAY));
@@ -609,7 +612,7 @@ final class Engineer implements Listener {
                 e.setCancelled(true);
                 tunnel.open(p, d);
             }
-            case "torre" -> {
+            case "torre", "torre_laser" -> {
                 ItemStack hand = p.getInventory().getItemInMainHand();
                 if (p.isSneaking() && hand.getType().isBlock() && hand.getType() != Material.AIR) return; // agachado com bloco: deixa colocar
                 e.setCancelled(true);
@@ -1030,7 +1033,7 @@ final class Engineer implements Listener {
     /** Confere se o bloco ainda e o dispositivo (pode ter sido trocado por fora). */
     private boolean valid(Device d, Block b) {
         Material want = switch (d.type) {
-            case "bancada" -> Material.SMITHING_TABLE; case "torre" -> Material.DISPENSER; case "carvao" -> Material.FURNACE;
+            case "bancada" -> Material.SMITHING_TABLE; case "torre", "torre_laser" -> Material.DISPENSER; case "carvao" -> Material.FURNACE;
             case "geotermico" -> Material.MAGMA_BLOCK; case "solar" -> Material.DAYLIGHT_DETECTOR; case "inversor" -> Material.WAXED_COPPER_BULB;
             case "fundicao" -> Material.BLAST_FURNACE; case "fornalha" -> Material.SMOKER; case "triturador" -> Material.DROPPER;
             case "plantadeira" -> Material.BARREL; case "montadora" -> Material.CRAFTER; case "escudo" -> Material.LIGHTNING_ROD;
@@ -1418,7 +1421,7 @@ final class Engineer implements Listener {
         }
         orphans.clear();
         for (Device t : devices.values()) {
-            if (!t.type.equals("torre")) continue;
+            if (!isTurret(t.type)) continue;
             World w = Bukkit.getWorld(t.world);
             if (!t.enabled || t.barrel <= 0 || !loaded(t, w)) { t.powered = false; continue; }
             t.powered = drain(t, upkeep(plugin.level(t.owner)), powerTicks % 3 == 0);
@@ -2093,9 +2096,122 @@ final class Engineer implements Listener {
         return true;
     }
 
+    static boolean isTurret(String type) { return type.equals("torre") || type.equals("torre_laser"); }
+
+    static final double LASER_COST = 25, LASER_DMG = 8, LASER_RADIUS = 3.5;
+
+    private int tntIn(Block b) {
+        int n = 0;
+        if (b.getState() instanceof Container c) for (ItemStack it : c.getInventory().getContents()) if (it != null && it.getType() == Material.TNT && typeOf(it) == null) n += it.getAmount();
+        return n;
+    }
+
+    /** Torre Laser: trava a mira com um feixe vermelho e lanca um TNT que so causa dano em area (sem explosao). */
+    private void tickLaser(Device t) {
+        World w = Bukkit.getWorld(t.world);
+        if (!loaded(t, w)) return;
+        Block b = w.getBlockAt(t.x, t.y, t.z);
+        if (!(b.getState() instanceof Container cont)) return;
+        int slot = -1;
+        ItemStack[] inv = cont.getInventory().getContents();
+        for (int i = 0; i < inv.length; i++) if (inv[i] != null && inv[i].getType() == Material.TNT && typeOf(inv[i]) == null) { slot = i; break; }
+        if (slot < 0) { t.nextShot = tick + 40; return; }
+        int lvl = plugin.level(t.owner);
+        int range = RANGE[lvl - 1] + 4;
+        Location c = t.center(w);
+        LivingEntity best = null;
+        double bestD = Double.MAX_VALUE;
+        for (Entity en : w.getNearbyEntities(c, range, range, range)) {
+            if (!(en instanceof LivingEntity le) || !hostile(le) || (t.filter & (1 << category(le))) == 0) continue;
+            double dd = le.getLocation().distanceSquared(c);
+            if (dd > range * range || dd < 9) continue; // perto demais: o TNT passaria por cima
+            Vector to = le.getEyeLocation().toVector().subtract(c.toVector());
+            Location muzzle = c.clone().add(to.clone().normalize().multiply(0.8));
+            Vector fm = le.getEyeLocation().toVector().subtract(muzzle.toVector());
+            if (w.rayTraceBlocks(muzzle, fm.clone().normalize(), fm.length(), FluidCollisionMode.NEVER, true) != null) continue;
+            // prioridade: a do menu (perto / menos vida / mais vida)
+            double score = switch (t.prio) { case 1 -> le.getHealth() * 1000 + dd; case 2 -> -le.getHealth() * 1000 + dd; default -> dd; };
+            if (score < bestD) { bestD = score; best = le; }
+        }
+        if (best == null) { t.nextShot = tick + 10; return; }
+        if (!drain(t, LASER_COST)) { t.nextShot = tick + 40; w.spawnParticle(Particle.SMOKE, c.clone().add(0, 0.6, 0), 3, 0.1, 0.1, 0.1, 0.01); return; }
+        ItemStack ammo = inv[slot];
+        ammo.setAmount(ammo.getAmount() - 1);
+        cont.getInventory().setItem(slot, ammo.getAmount() > 0 ? ammo : null);
+        LivingEntity target = best;
+        // trava a mira: feixe vermelho por meio segundo, depois dispara
+        Particle.DustOptions red = new Particle.DustOptions(Color.fromRGB(255, 30, 30), 0.7f);
+        for (int k = 0; k < 3; k++) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!target.isValid()) return;
+                Vector from = c.toVector(), to = target.getLocation().toVector().add(new Vector(0, target.getHeight() * 0.5, 0));
+                Vector step = to.clone().subtract(from);
+                int n = (int) Math.min(80, step.length() / 0.35);
+                step.multiply(1.0 / Math.max(1, n));
+                Vector p = from.clone();
+                for (int i = 0; i < n; i++) { p.add(step); w.spawnParticle(Particle.DUST, p.getX(), p.getY(), p.getZ(), 1, 0, 0, 0, 0, red); }
+            }, k * 4L);
+        }
+        w.playSound(c, Sound.ENTITY_GUARDIAN_ATTACK, 0.6f, 1.8f);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (target.isValid()) launchTnt(w, c, target, t, lvl); }, 10L);
+        t.nextShot = tick + Math.max(40, 90 - 10 * lvl);
+    }
+
+    private void launchTnt(World w, Location c, LivingEntity target, Device t, int lvl) {
+        Location aimAt = target.getLocation();
+        Vector d = aimAt.toVector().subtract(c.toVector());
+        double horiz = Math.hypot(d.getX(), d.getZ());
+        int T = (int) Math.max(12, Math.min(36, horiz * 1.1));
+        double k = 0.02 / (1 - Math.pow(0.98, T)); // compensa o arrasto do TNT
+        Vector v = new Vector(d.getX() * k, d.getY() / T + 0.5 * 0.04 * T, d.getZ() * k);
+        Location muzzle = c.clone().add(0, 0.7, 0);
+        TNTPrimed tnt = w.spawn(muzzle, TNTPrimed.class, e -> {
+            e.setFuseTicks(T + 60);
+            e.setYield(0);
+            e.setIsIncendiary(false);
+            e.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+            e.addScoreboardTag("bc_laser_tnt");
+        });
+        tnt.setVelocity(v);
+        w.playSound(c, Sound.ENTITY_SNOWBALL_THROW, 1f, 0.5f);
+        w.playSound(c, Sound.ENTITY_TNT_PRIMED, 0.6f, 1.2f);
+        double dmg = LASER_DMG + (lvl - 1);
+        int[] age = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            age[0]++;
+            if (!tnt.isValid()) { task.cancel(); return; }
+            boolean near = false;
+            for (Entity en : tnt.getNearbyEntities(1.2, 1.2, 1.2)) if (en instanceof LivingEntity le && hostile(le)) { near = true; break; }
+            if (!tnt.isOnGround() && !near && age[0] < T + 40) return;
+            task.cancel();
+            Location at = tnt.getLocation();
+            tnt.remove();
+            w.spawnParticle(Particle.EXPLOSION, at, 4, 0.8, 0.4, 0.8, 0);
+            w.spawnParticle(Particle.FLAME, at, 25, 1.2, 0.3, 1.2, 0.03);
+            w.playSound(at, Sound.ENTITY_GENERIC_EXPLODE, 1.2f, 1.3f);
+            for (Entity en : w.getNearbyEntities(at, LASER_RADIUS, LASER_RADIUS, LASER_RADIUS)) {
+                if (!(en instanceof LivingEntity le) || !hostile(le)) continue;
+                double dist = le.getLocation().distance(at);
+                if (dist > LASER_RADIUS) continue;
+                le.setNoDamageTicks(0);
+                le.damage(dmg * (1 - 0.5 * dist / LASER_RADIUS), tnt);
+                Vector kb = le.getLocation().toVector().subtract(at.toVector()).setY(0);
+                if (kb.lengthSquared() > 0.01) le.setVelocity(le.getVelocity().add(kb.normalize().multiply(0.4).setY(0.25)));
+            }
+        }, 1L, 1L);
+    }
+
+    /** Seguranca: o TNT da Torre Laser nunca explode de verdade. */
+    @EventHandler(ignoreCancelled = true)
+    public void onLaserTntPrime(org.bukkit.event.entity.ExplosionPrimeEvent e) {
+        if (e.getEntity().getScoreboardTags().contains("bc_laser_tnt")) { e.setCancelled(true); e.getEntity().remove(); }
+    }
+
     private void tickTurrets() {
         tick += 5;
         if (tick % 10 == 0) tickShields();
+        for (Device lt : new ArrayList<>(devices.values()))
+            if (lt.type.equals("torre_laser") && lt.enabled && lt.powered && lt.nextShot <= tick) tickLaser(lt);
         for (Iterator<Device> it = devices.values().iterator(); it.hasNext(); ) {
             Device t = it.next();
             if (!t.type.equals("torre") || !t.enabled || !t.powered || t.barrel <= 0 || t.nextShot > tick) continue;
@@ -2327,6 +2443,20 @@ final class Engineer implements Listener {
                 if (d.type.equals("fundicao")) out = out.append(nl).append(Component.text("combustivel " + (int) d.energy + "s", g));
                 else if (net(d).devs.size() <= 1) out = out.append(nl).append(Component.text("sem cabo", NamedTextColor.RED));
                 return out;
+            }
+            case "torre_laser" -> {
+                int lvl = plugin.level(d.owner);
+                int tnt = tntIn(b);
+                double net = networkEnergy(d, w);
+                Component state;
+                if (!d.enabled) state = Component.text("DESLIGADA", NamedTextColor.GRAY, TextDecoration.BOLD);
+                else if (sourcesFor(d).isEmpty()) state = Component.text("SEM REDE", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (tnt == 0) state = Component.text("SEM TNT", NamedTextColor.RED, TextDecoration.BOLD);
+                else if (!d.powered || net < LASER_COST) state = Component.text("SEM ENERGIA", NamedTextColor.RED, TextDecoration.BOLD);
+                else state = Component.text("⚡ " + (int) net + " na rede", NamedTextColor.YELLOW);
+                return name.append(nl).append(Component.text("Nivel " + lvl + "  •  alcance " + (RANGE[lvl - 1] + 4), g))
+                        .append(nl).append(Component.text("✹ " + tnt + " TNT", NamedTextColor.WHITE))
+                        .append(nl).append(state);
             }
             case "torre" -> {
                 int lvl = plugin.level(d.owner);
@@ -2615,8 +2745,8 @@ final class Engineer implements Listener {
     public void onKill(EntityDeathEvent e) {
         lastPos.remove(e.getEntity().getUniqueId());
         if (!(e.getEntity().getLastDamageCause() instanceof EntityDamageByEntityEvent ed)) return;
-        if (!(ed.getDamager() instanceof Projectile a)) return;
-        String owner = a.getPersistentDataContainer().get(arrowKey, PersistentDataType.STRING);
+        if (!(ed.getDamager() instanceof Projectile || ed.getDamager() instanceof TNTPrimed)) return;
+        String owner = ed.getDamager().getPersistentDataContainer().get(arrowKey, PersistentDataType.STRING);
         if (owner == null) return;
         try { plugin.addXp(UUID.fromString(owner), XP_KILL); } catch (IllegalArgumentException ignored) { }
     }
@@ -2684,7 +2814,7 @@ final class Engineer implements Listener {
                 y.set(k + ".sel", d.sel);
                 for (Map.Entry<Integer, ItemStack> en : factory.contents(d).entrySet()) y.set(k + ".inv.s" + en.getKey(), en.getValue());
             }
-            if (d.type.equals("torre")) {
+            if (isTurret(d.type)) {
                 y.set(k + ".filter", d.filter);
                 y.set(k + ".prio", d.prio); y.set(k + ".ammo", d.ammoPref);
                 y.set(k + ".barrel", d.barrel);

@@ -39,7 +39,8 @@ Receita na mesa de trabalho: mesa de trabalho no centro, 5 ferros embaixo e dos 
 
 ### Dispositivos
 
-- **Torre Sentinela** (dispenser): atira flechas (normais, com efeito, espectrais), bolas de fogo ou balas guardadas nela em mobs hostis. Mira na frente do alvo e compensa a queda da flecha. Nunca acerta jogador, pet ou animal. Menu com municao preferida, prioridade de alvo, filtro de mobs, liga/desliga e alcance.
+- **Torre Laser** (nivel 4, dispenser): trava a mira com um feixe vermelho e lanca TNT. O TNT nao explode nem quebra blocos: ao cair causa 8 de dano (+1 por nivel) em area, raio 3,5, so em mobs hostis. Municao: TNT dentro dela. 25 energia por tiro, alcance da torre + 4. Usa o mesmo menu de filtro e prioridade e conta no limite de torres. Receita: dispenser, 4 TNT, 2 blocos de redstone, 4 chapas de aco, 2 motores e 1 circuito avancado.
+- **Torre Sentinela** (dispenser; receita com 2 Ferro Industrial, 1 motor e 1 circuito): atira flechas (normais, com efeito, espectrais), bolas de fogo ou balas guardadas nela em mobs hostis. Mira na frente do alvo e compensa a queda da flecha. Nunca acerta jogador, pet ou animal. Menu com municao preferida, prioridade de alvo, filtro de mobs, liga/desliga e alcance.
   - Consome energia ligada mesmo parada (2.0/s, sobe com o nivel) e mais por tiro (5 flecha, 10 bola de fogo, 2 por bala de cobre, 3 por bala de ferro).
   - **Cano**: aguenta 300 tiros (bola de fogo e rajada de ferro contam 2, rajada de cobre conta 1). Gasto, a torre para. Troque pelo menu da torre com um Cano da Torre. O desgaste fica salvo no item se a torre for quebrada.
 - **Gerador a Carvao** (fornalha): 4 energia/s enquanto queima.
