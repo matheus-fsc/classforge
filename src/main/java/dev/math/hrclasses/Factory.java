@@ -47,7 +47,7 @@ final class Factory implements Listener {
     static final int[] GAUGE = {37, 38, 39, 40, 41, 42, 43};
     static final int S_INFO = 4, S_ENERGY = 36, S_POWER = 45, S_TAG = 47, S_AUTO = 49, S_NET = 51;
     /** XP de Engenharia por lote pronto. */
-    static final double XP_BATCH = 0.5;
+    static double XP_BATCH = 0.5;
     /** Itens que a maquina puxa do bau de cima por segundo. */
     static final int PULL_PER_TICK = 4;
 

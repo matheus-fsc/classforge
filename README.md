@@ -1,6 +1,6 @@
 # HardcoreRouletteClasses
 
-![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.11.1-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.12.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
 
 Plugin Paper de **habilidades por nivel** para servidores hardcore em grupo. Ninguem escolhe classe: todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo. Os niveis zeram quando a vida acaba.
 
@@ -31,7 +31,7 @@ Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), m
 | [Exploracao](docs/wiki/Exploracao.md) | Companheiro, Ancora de Perola, orbes, Livros Antigos |
 | [Arquitetura](docs/wiki/Arquitetura.md) | Classes Java, dados, geracao dos diagramas |
 
-## Estado atual (versao 0.11.1)
+## Estado atual (versao 0.12.0)
 
 | Area | Estado | Observacao |
 |------|--------|------------|
@@ -72,6 +72,25 @@ Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Eng
 
 ![Livros Antigos](docs/img/livros-antigos.png)
 
+## Configuracao
+
+Tudo que era fixo no codigo agora fica em `plugins/HardcoreRouletteClasses/config.yml`, escrito comentado na primeira vez que o servidor liga ([modelo](src/main/resources/config.yml)). Os padroes sao os valores de antes, entao nada muda ate voce editar.
+
+| Secao | O que controla |
+|-------|----------------|
+| `worlds` | Em quais mundos as habilidades valem: por prefixo (`hc_`), todos ou uma lista |
+| `progress` | Zerar os niveis em mundo novo (vida nova) e dividir XP com a party |
+| `modules` | Liga ou desliga Engenharia, Exploracao, Plantacao e Livros Antigos |
+| `engineering` | XP por nivel, torres, balas, Torre Laser, geracao de energia, rede, maquinas, Tuneladora, XP de cada acao, etiquetas |
+| `engineering.recipes` | Cada receita da Bancada: ligar/desligar, nivel, materiais e componentes (o plugin escreve todas na primeira vez) |
+| `exploration` | XP por nivel, bonus nos orbes, Ancora de Perola |
+| `farming` | XP por nivel, raio, plantadores, ritmo e colheita extra |
+| `ancient-books` | Chance de achar, blocos do Veio e livros desligados |
+
+`/classe reload` aplica os numeros sem reiniciar. Ligar ou desligar modulos e mudar receitas pede reinicio.
+
+Para usar fora do HardcoreRoulette: `worlds.mode: all` e `progress.reset-on-new-world: false`.
+
 ## Comandos
 
 | Comando | Descricao |
@@ -81,6 +100,7 @@ Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Eng
 | `/classe particulas` | Liga/desliga as particulas de energia |
 | `/classe admin <jogador> <nivel>` | Define o nivel (permissao `hrclasses.admin`) |
 | `/classe dar <item>` | Da um item do plugin (permissao `hrclasses.admin`) |
+| `/classe reload` | Recarrega o config.yml (permissao `hrclasses.admin`) |
 | `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `hrclasses.admin`) |
 
 ## Permissoes
@@ -103,7 +123,7 @@ Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotli
 
 ![Arquitetura](docs/img/arquitetura.png)
 
-Dados em `plugins/HardcoreRouletteClasses/`: `players.yml`, `devices.yml`, `explorer.yml` e `farm.yml`. Mais em [Arquitetura](docs/wiki/Arquitetura.md).
+Dados em `plugins/HardcoreRouletteClasses/`: `config.yml`, `players.yml`, `devices.yml`, `explorer.yml` e `farm.yml`. Mais em [Arquitetura](docs/wiki/Arquitetura.md).
 
 ## Licenca
 

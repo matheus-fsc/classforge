@@ -51,13 +51,13 @@ import java.util.*;
 final class Farmer implements Listener {
 
     // por nivel 1..5
-    static final int[] RADIUS = {4, 5, 6, 7, 8};
-    static final int[] MAX_GOLEMS = {1, 2, 2, 3, 4};
+    static int[] RADIUS = {4, 5, 6, 7, 8};
+    static int[] MAX_GOLEMS = {1, 2, 2, 3, 4};
     /** Segundos de descanso do golem entre uma semente e outra. */
-    static final int[] REST = {4, 3, 3, 2, 1};
+    static int[] REST = {4, 3, 3, 2, 1};
     /** Chance (%) de a colheita manual render 1 a mais. */
-    static final int[] BONUS = {5, 10, 15, 20, 25};
-    static final double XP_HARVEST = 0.25, XP_PLANT = 0.1;
+    static int[] BONUS = {5, 10, 15, 20, 25};
+    static double XP_HARVEST = 0.25, XP_PLANT = 0.1;
     /** Depois disso sem conseguir chegar, o golem e levado ate o canteiro. */
     static final int WALK_TIMEOUT = 12;
 

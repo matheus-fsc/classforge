@@ -17,6 +17,7 @@
 | `Farmer` | Plantador de Cobre (golem) e colheita extra |
 | `Relics` | Livros Antigos: loot de estrutura, aplicacao no item e efeitos |
 | `RecipeGrid` | Tela generica de receita 3x3 usada pelos paineis |
+| `Settings` | Le o config.yml e aplica nos campos de balanceamento e nas receitas |
 
 ## Integracao com o HardcoreRoulette
 
@@ -27,6 +28,7 @@ O plugin nao depende do HardcoreRoulette para compilar. A divisao de XP com a pa
 
 | Arquivo | Conteudo |
 |---------|----------|
+| `config.yml` | Configuracao (mundos, modulos, balanceamento, receitas) |
 | `players.yml` | XP e mundo de cada jogador |
 | `devices.yml` | Dispositivos, cabos e postes |
 | `explorer.yml` | Companheiros e ancoras |

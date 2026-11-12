@@ -1,0 +1,151 @@
+# HardcoreRouletteClasses: configuracao
+#
+# Todos os valores abaixo sao os padroes do plugin. Chave que faltar e recriada com o padrao
+# quando o servidor liga. /classe reload aplica os numeros sem reiniciar; ligar ou desligar
+# modulos e mudar receitas precisa reiniciar.
+#
+# Listas "por nivel" sempre tem 5 valores: nivel 1, 2, 3, 4 e 5.
+
+# Em quais mundos as habilidades valem (XP, loot de livros, regras de vida).
+worlds:
+  # prefix: mundos cujo nome comeca com "prefix" (o _nether e o _the_end do mesmo mundo contam junto)
+  # all:    todos os mundos
+  # list:   so os mundos em "list"
+  mode: prefix
+  prefix: "hc_"
+  list: []
+
+progress:
+  # Zera os niveis quando o jogador aparece num mundo valido diferente do que ganhou o XP
+  # (no HardcoreRoulette cada vida e um mundo novo). Desligue em servidor normal.
+  reset-on-new-world: true
+  # Divide o XP de classe com a party (precisa do HardcoreRoulette; a fracao vem dele).
+  party-share: true
+
+# Liga ou desliga cada habilidade inteira.
+modules:
+  engineering: true
+  exploration: true
+  farming: true
+  ancient-books: true
+
+# ------------------------------------------------------------------ Engenharia
+engineering:
+  level-xp: [0, 25, 75, 175, 350]
+
+  turrets:
+    max-per-level: [2, 3, 4, 5, 6]
+    range-per-level: [12, 14, 16, 18, 20]
+    cooldown-ticks-per-level: [20, 17, 14, 12, 10]   # 20 ticks = 1 s entre tiros
+    barrel-shots: 300                                 # tiros ate o cano gastar
+    energy-per-arrow: 5.0
+    energy-per-fireball: 10.0
+
+  bullets:
+    burst: 3
+    copper-damage: 2.0
+    iron-damage: 3.0
+    copper-energy: 2.0
+    iron-energy: 3.0
+
+  laser:
+    energy-per-shot: 25.0
+    damage: 8.0          # +1 por nivel de Engenharia do dono
+    radius: 3.5
+
+  energy:                # energia por segundo
+    coal-generator: 4.0
+    geothermal-per-lava: 0.5    # dobra no Nether
+    solar-day: 1.5
+    solar-storm: 0.5
+    battery-capacity: 5000.0
+    inverter-rate: 8.0
+    inverter-efficiency: 0.9
+
+  network:
+    pole-range: 24.0
+    max-nodes: 4096
+    max-power-devices: 16
+    shock-damage: 1.0
+    shock-interval-ms: 500
+
+  machines:
+    foundry-seconds: 20
+    foundry-fuel-coal-block: 160
+    foundry-fuel-lava: 200
+    forge-energy: 4.0
+    furnace-energy: 4.0
+    furnace-seconds: 5
+    crusher-energy: 5.0
+    crusher-seconds: 4
+    crusher-bonus-chance: 0.35
+    planter-energy-per-seed: 1.0
+    assembler-energy: 5.0
+    assembler-seconds: 10
+    shield-energy: 3.0
+    shield-energy-per-mob: 1.0
+    miner-energy-per-block: 12.0
+    miner-seconds-per-block: 3
+    miner-radius: 2       # 2 = area 5x5
+
+  tunnel:
+    seconds-per-block: 4
+    energy: 10.0
+    drill-durability: 1800
+    max-length: 1024
+    drill-swap-seconds: 10
+
+  xp:
+    replace-barrel: 8
+    turret-kill: 2
+    craft-mechanical: 2
+    anvil-repair: 4
+    foundry-ingot: 2.0
+    furnace-ingot: 0.2
+    machine-item: 0.25
+    forge-batch: 1.0
+    factory-batch: 0.5
+    tunnel-block: 0.25
+
+  display:
+    tag-scale: 0.55
+    max-energy-particles: 250
+    energy-particles-view: 48.0
+
+  # Receitas da Bancada. Na primeira vez que o servidor liga, o plugin escreve aqui todas as
+  # receitas atuais. Para cada item:
+  #   enabled: false   tira o item do jogo
+  #   level:           nivel de Engenharia que libera
+  #   materials:       itens vanilla (nome do Material do Bukkit)
+  #   parts:           componentes do plugin (ferro_industrial, chapa_aco, motor, circuito...)
+
+# ------------------------------------------------------------------ Exploracao
+exploration:
+  level-xp: [0, 150, 500, 1200, 2500]
+  orb-xp-bonus-percent: [4, 8, 12, 16, 20]
+  anchor:
+    min-level: 2
+    range-per-level: [0, 500, 1000, 2000, 4000]
+    blocks-per-xp-level: 150     # cada 150 blocos de distancia custam 1 nivel de XP
+    cooldown-seconds: 120
+    channel-ticks: 60
+
+# ------------------------------------------------------------------ Plantacao
+farming:
+  level-xp: [0, 60, 200, 500, 1000]
+  radius-per-level: [4, 5, 6, 7, 8]
+  max-planters-per-level: [1, 2, 2, 3, 4]
+  seconds-per-seed-per-level: [4, 3, 3, 2, 1]
+  harvest-bonus-percent: [5, 10, 15, 20, 25]
+  xp-per-harvest: 0.25
+  xp-per-planted-seed: 0.1
+
+# ------------------------------------------------------------------ Livros Antigos
+ancient-books:
+  # Chance por bau de estrutura: base + por-nivel x nivel de Exploracao.
+  chance-base: 0.04
+  chance-per-exploration-level: 0.03
+  vein-blocks: [0, 6, 12, 20]   # blocos extras do Veio: sem livro, I, II, III
+  # Livros fora do jogo: veio, replantio, decapitacao, protecao, lenhador, colheita,
+  # arado, sabedoria, visao, sereia, molas, implantes
+  disabled: []

@@ -52,12 +52,12 @@ final class Tunnel implements Listener {
     static final int S_TRAIN = 23, S_MODULE = 32;
     static final int S_INFO = 4, S_POWER = 45, S_DRILL = 46, S_TAG = 47, S_CARGO = 49, S_NET = 51, S_SHOW = 53;
     /** Uma fatia 3x3 a cada STEP_SECONDS, gastando STEP_RATE de energia por segundo enquanto avanca. */
-    static final int STEP_SECONDS = 4;
-    static final double STEP_RATE = 10;
+    static int STEP_SECONDS = 4;
+    static double STEP_RATE = 10;
     /** Blocos que uma broca aguenta (ar nao gasta). */
-    static final int DRILL_MAX = 1800;
-    static final int SWAP_SECONDS = 10, MAX_LEN = 1024, CARGO_STACKS = 27, CART_SPEED = 8, PULL_PER_TICK = 8;
-    static final double XP_STEP = 0.25;
+    static int DRILL_MAX = 1800;
+    static int SWAP_SECONDS = 10, MAX_LEN = 1024, CARGO_STACKS = 27, CART_SPEED = 8, PULL_PER_TICK = 8;
+    static double XP_STEP = 0.25;
     static final String MARK = "bc_tunnel_cart";
 
     static final class Bore {

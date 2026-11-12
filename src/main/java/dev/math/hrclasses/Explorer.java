@@ -47,13 +47,13 @@ import java.util.*;
  */
 final class Explorer implements Listener {
 
-    static final int[] RANGE = {0, 500, 1000, 2000, 4000};   // alcance da ancora por nivel
-    static final int ANCHOR_LEVEL = 2;
-    static final int BLOCKS_PER_LEVEL = 150;                   // custo em niveis de XP por distancia
-    static final long TP_COOLDOWN_MS = 120_000;
-    static final int CHANNEL_TICKS = 60;
+    static int[] RANGE = {0, 500, 1000, 2000, 4000};   // alcance da ancora por nivel
+    static int ANCHOR_LEVEL = 2;
+    static int BLOCKS_PER_LEVEL = 150;                   // custo em niveis de XP por distancia
+    static long TP_COOLDOWN_MS = 120_000;
+    static int CHANNEL_TICKS = 60;
     /** Bonus (%) no XP vanilla coletado em orbes, por nivel. Teto baixo de proposito. */
-    static final int[] XP_BONUS = {4, 8, 12, 16, 20};
+    static int[] XP_BONUS = {4, 8, 12, 16, 20};
 
     enum Kind {
         LOBO("Lobo", Material.BONE_BLOCK, Material.BONE, NamedTextColor.GRAY),

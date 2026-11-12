@@ -39,9 +39,9 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         String world; int xp, exp, farm;
     }
 
-    static final int[] LEVEL_XP = {0, 25, 75, 175, 350};
-    static final int[] EXP_XP = {0, 150, 500, 1200, 2500};
-    static final int[] FARM_XP = {0, 60, 200, 500, 1000};
+    static int[] LEVEL_XP = {0, 25, 75, 175, 350};
+    static int[] EXP_XP = {0, 150, 500, 1200, 2500};
+    static int[] FARM_XP = {0, 60, 200, 500, 1000};
 
     private final Map<UUID, PData> players = new HashMap<>();
     private final Set<UUID> fxOff = new HashSet<>();
@@ -54,16 +54,17 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     @Override
     public void onEnable() {
         getDataFolder().mkdirs();
+        Settings.load(this);
         playersFile = new File(getDataFolder(), "players.yml");
         loadPlayers();
-        engineer = new Engineer(this);
-        engineer.enable();
-        explorer = new Explorer(this);
-        explorer.enable();
-        farmer = new Farmer(this);
-        farmer.enable();
+        if (Settings.ENGINEERING) { engineer = new Engineer(this); engineer.enable(); }
+        if (Settings.EXPLORATION) { explorer = new Explorer(this); explorer.enable(); }
+        if (Settings.FARMING) { farmer = new Farmer(this); farmer.enable(); }
         RecipeGrid.register(this);
-        relics = new Relics(this);
+        if (Settings.BOOKS) relics = new Relics(this);
+        getLogger().info("Modulos: engenharia=" + Settings.ENGINEERING + ", exploracao=" + Settings.EXPLORATION
+                + ", plantacao=" + Settings.FARMING + ", livros=" + Settings.BOOKS + ", mundos=" + Settings.WORLD_MODE
+                + (Settings.WORLD_MODE.equals("prefix") ? " " + Settings.WORLD_PREFIX : ""));
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getScheduler().runTaskTimer(this, this::savePlayers, 1200L, 1200L);
         for (Player p : Bukkit.getOnlinePlayers()) checkLife(p);
@@ -86,7 +87,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     }
 
     static boolean isRunWorld(World w) {
-        return w != null && baseOf(w.getName()).startsWith("hc_");
+        return Settings.isRunWorld(w);
     }
 
     boolean fxEnabled(Player p) { return !fxOff.contains(p.getUniqueId()); }
@@ -134,7 +135,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     /** Repassa parte do XP para os membros da party no alcance (mesma fracao do XP do AuraSkills). */
     @SuppressWarnings("unchecked")
     private void share(UUID from, int amount, int kind) {
-        if (sharing || amount <= 0) return;
+        if (sharing || amount <= 0 || !Settings.PARTY_SHARE) return;
         Player p = Bukkit.getPlayer(from);
         var hr = Bukkit.getPluginManager().getPlugin("HardcoreRoulette");
         if (p == null || hr == null || !hr.isEnabled()) return;
@@ -172,7 +173,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         if (p != null && after > before) {
             p.sendMessage(Component.text("✦ Plantacao subiu para o nivel " + after + "!", NamedTextColor.GREEN, TextDecoration.BOLD));
             p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f);
-            p.sendMessage(Component.text(farmer.levelSummary(after), NamedTextColor.GRAY));
+            if (farmer != null) p.sendMessage(Component.text(farmer.levelSummary(after), NamedTextColor.GRAY));
         }
     }
 
@@ -187,7 +188,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         if (p != null && after > before) {
             p.sendMessage(Component.text("✦ Exploracao subiu para o nivel " + after + "!", NamedTextColor.AQUA, TextDecoration.BOLD));
             p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f);
-            p.sendMessage(Component.text(explorer.levelSummary(after), NamedTextColor.GRAY));
+            if (explorer != null) p.sendMessage(Component.text(explorer.levelSummary(after), NamedTextColor.GRAY));
         }
     }
 
@@ -204,7 +205,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
             if (after > before) {
                 p.sendMessage(Component.text("✦ Engenharia subiu para o nivel " + after + "!", NamedTextColor.GOLD, TextDecoration.BOLD));
                 p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f);
-                p.sendMessage(Component.text(engineer.levelSummary(after), NamedTextColor.GRAY));
+                if (engineer != null) p.sendMessage(Component.text(engineer.levelSummary(after), NamedTextColor.GRAY));
             }
         }
     }
@@ -243,17 +244,17 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
 
     /** Zera o XP se o jogador esta num mundo hc diferente do que ganhou o XP (nova vida). */
     void checkLife(Player p) {
-        engineer.discover(p);
-        explorer.discover(p);
-        farmer.discover(p);
-        if (!isRunWorld(p.getWorld())) return;
+        if (engineer != null) engineer.discover(p);
+        if (explorer != null) explorer.discover(p);
+        if (farmer != null) farmer.discover(p);
+        if (!isRunWorld(p.getWorld()) || !Settings.RESET_ON_NEW_WORLD) return;
         String base = baseOf(p.getWorld().getName());
         PData d = data(p.getUniqueId());
         if (d.world != null && !base.equals(d.world)) {
             if (d.xp > 0 || d.exp > 0 || d.farm > 0) p.sendMessage(Component.text("☠ Nova vida: suas habilidades voltaram ao nivel 1.", NamedTextColor.RED));
             d.xp = 0; d.exp = 0; d.farm = 0;
-            explorer.resetLife(p.getUniqueId());
-            farmer.resetLife(p.getUniqueId());
+            if (explorer != null) explorer.resetLife(p.getUniqueId());
+            if (farmer != null) farmer.resetLife(p.getUniqueId());
         }
         d.world = base;
     }
@@ -265,6 +266,11 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
+        if (a.length >= 1 && a[0].equalsIgnoreCase("reload") && s.hasPermission("hrclasses.admin")) {
+            Settings.load(this);
+            s.sendMessage("config.yml recarregado. Receitas e modulos ligados/desligados so mudam reiniciando o servidor.");
+            return true;
+        }
         if (a.length >= 3 && a[0].equalsIgnoreCase("admin") && s.hasPermission("hrclasses.admin")) {
             Player t = Bukkit.getPlayerExact(a[1]);
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
@@ -282,6 +288,9 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             List<ItemStack> items = new ArrayList<>();
             String which = a[1].toLowerCase(Locale.ROOT);
+            boolean off = which.startsWith("eng") ? engineer == null : which.startsWith("exp") ? explorer == null
+                    : which.startsWith("livro") ? relics == null : farmer == null;
+            if (off) { s.sendMessage("Esse modulo esta desligado no config.yml."); return true; }
             if (which.startsWith("eng")) {
                 for (String type : Engineer.TYPES) {
                     ItemStack it = engineer.item(type);
@@ -309,7 +318,9 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         }
         if (!(s instanceof Player p)) { s.sendMessage("Somente jogadores."); return true; }
         if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("hrclasses.admin")) {
-            ItemStack it = a[1].equalsIgnoreCase("ancora") ? explorer.anchorItem() : a[1].equalsIgnoreCase("plantador") ? farmer.planterItem() : engineer.item(a[1].toLowerCase(Locale.ROOT));
+            ItemStack it = a[1].equalsIgnoreCase("ancora") ? (explorer == null ? null : explorer.anchorItem())
+                    : a[1].equalsIgnoreCase("plantador") ? (farmer == null ? null : farmer.planterItem())
+                    : engineer == null ? null : engineer.item(a[1].toLowerCase(Locale.ROOT));
             if (it == null) { p.sendMessage("Itens: " + String.join(", ", Engineer.TYPES)); return true; }
             p.getInventory().addItem(it);
             return true;
@@ -319,7 +330,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
             int xp = data(p.getUniqueId()).xp;
             String next = lvl >= 5 ? "maximo" : xp + "/" + LEVEL_XP[lvl];
             p.sendMessage(Component.text("Engenharia nivel " + lvl + " (XP " + next + ")", NamedTextColor.GOLD, TextDecoration.BOLD));
-            p.sendMessage(Component.text(engineer.status(p), NamedTextColor.GRAY));
+            if (engineer != null) p.sendMessage(Component.text(engineer.status(p), NamedTextColor.GRAY));
             int el = explorerLevel(p.getUniqueId()), ex = data(p.getUniqueId()).exp;
             p.sendMessage(Component.text("Exploracao nivel " + el + " (XP " + (el >= 5 ? "maximo" : ex + "/" + EXP_XP[el]) + ")", NamedTextColor.AQUA, TextDecoration.BOLD));
             int fl = farmLevel(p.getUniqueId()), fxp = data(p.getUniqueId()).farm;
@@ -368,6 +379,9 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         inv.setItem(15, skillIcon(Material.GOLDEN_HOE, "Plantacao - nivel " + fl, NamedTextColor.GREEN, List.of(
                 fl >= 5 ? "Nivel maximo" : "XP " + fxp + "/" + FARM_XP[fl], "", "Plantadores (golems de cobre) que", "plantam do bau, e colheita extra.",
                 "Sobe colhendo plantacao madura.", "", "Clique para abrir.")));
+        if (explorer == null) inv.setItem(11, skillIcon(Material.BARRIER, "Exploracao (desligada)", NamedTextColor.GRAY, List.of("Desligada no config.yml.")));
+        if (engineer == null) inv.setItem(13, skillIcon(Material.BARRIER, "Engenharia (desligada)", NamedTextColor.GRAY, List.of("Desligada no config.yml.")));
+        if (farmer == null) inv.setItem(15, skillIcon(Material.BARRIER, "Plantacao (desligada)", NamedTextColor.GRAY, List.of("Desligada no config.yml.")));
         inv.setItem(22, skillIcon(Material.BOOK, "Como funciona", NamedTextColor.WHITE, List.of(
                 "Ninguem escolhe classe: todo mundo", "pode fazer tudo. Cada habilidade", "tem nivel proprio e libera mais", "coisas conforme sobe.", "", "Os niveis zeram quando a vida acaba.")));
         p.openInventory(inv);
@@ -378,9 +392,9 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
         if (!(e.getInventory().getHolder() instanceof SkillMenu)) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
-        if (e.getRawSlot() == 13) engineer.openPanel(p);
-        else if (e.getRawSlot() == 11) explorer.openPanel(p);
-        else if (e.getRawSlot() == 15) farmer.openPanel(p);
+        if (e.getRawSlot() == 13 && engineer != null) engineer.openPanel(p);
+        else if (e.getRawSlot() == 11 && explorer != null) explorer.openPanel(p);
+        else if (e.getRawSlot() == 15 && farmer != null) farmer.openPanel(p);
     }
 
     @EventHandler
@@ -390,7 +404,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
             List<String> o = new ArrayList<>(List.of("info", "particulas"));
-            if (s.hasPermission("hrclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); }
+            if (s.hasPermission("hrclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); o.add("reload"); }
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }

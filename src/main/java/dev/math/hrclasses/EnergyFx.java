@@ -12,8 +12,8 @@ import java.util.*;
 /** Pulsos de energia em particulas que correm pelo caminho real dos cabos (pontos ja centralizados). */
 final class EnergyFx {
 
-    private static final int MAX_PULSES = 250;
-    private static final double VIEW = 48;
+    static int MAX_PULSES = 250;
+    static double VIEW = 48;
 
     private static final class Pulse {
         final World w; final List<double[]> path; final Particle.DustOptions dust, trail; int idx;

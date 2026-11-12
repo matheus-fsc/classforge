@@ -63,7 +63,7 @@ final class Relics implements Listener {
             new Relic("molas", "Molas", 2, "botas", new String[]{"Pulo um pouco maior enquanto veste:", "pulo I / pulo II."}),
             new Relic("implantes", "Implantes", 1, "capacete", new String[]{"Andando, a fome enche aos poucos", "(1 ponto a cada 6 s)."}),
     };
-    static final int[] VEIN = {0, 6, 12, 20};
+    static int[] VEIN = {0, 6, 12, 20};
 
     private final HardcoreRouletteClasses plugin;
     private final NamespacedKey bookKey;
@@ -122,6 +122,7 @@ final class Relics implements Listener {
     }
 
     int level(ItemStack it, String id) {
+        if (Settings.BOOKS_OFF.contains(id)) return 0;
         if (it == null || !it.hasItemMeta()) return 0;
         Integer v = it.getItemMeta().getPersistentDataContainer().get(keys.get(id), PersistentDataType.INTEGER);
         return v == null ? 0 : v;
@@ -176,7 +177,7 @@ final class Relics implements Listener {
 
     // ---------- onde aparece: baus de estrutura ----------
 
-    static double findChance(int explorerLevel) { return 0.04 + 0.03 * explorerLevel; } // nivel 1: 7% ... nivel 5: 19%
+    static double findChance(int explorerLevel) { return Settings.BOOK_BASE + Settings.BOOK_PER_LEVEL * explorerLevel; } // nivel 1: 7% ... nivel 5: 19%
 
     @EventHandler(ignoreCancelled = true)
     public void onLoot(LootGenerateEvent e) {
@@ -185,7 +186,10 @@ final class Relics implements Listener {
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
         int lvl = plugin.explorerLevel(p.getUniqueId());
         if (rnd.nextDouble() >= findChance(lvl)) return;
-        Relic r = RELICS[rnd.nextInt(RELICS.length)];
+        List<Relic> pool = new ArrayList<>();
+        for (Relic x : RELICS) if (!Settings.BOOKS_OFF.contains(x.id())) pool.add(x);
+        if (pool.isEmpty()) return;
+        Relic r = pool.get(rnd.nextInt(pool.size()));
         double roll = rnd.nextDouble();
         int bl = roll < 0.10 + 0.02 * lvl ? 3 : roll < 0.40 + 0.03 * lvl ? 2 : 1;
         e.getLoot().add(book(r.id(), Math.min(bl, r.max())));

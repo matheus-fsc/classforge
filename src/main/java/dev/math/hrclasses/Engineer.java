@@ -62,57 +62,57 @@ final class Engineer implements Listener {
     static final Set<String> MACHINES = Set.of("fundicao", "forja", "fornalha", "triturador", "plantadeira", "montadora", "escudo", "mineradora",
             "prensa", "torno", "bobinadeira", "cadinho", "gravadora", "laminadora", "estacao");
     /** Choque do cabo: dano a cada SHOCK_MS enquanto encostar. +25% por peca de armadura de metal. */
-    static final double SHOCK_DMG = 1.0;
-    static final long SHOCK_MS = 500;
+    static double SHOCK_DMG = 1.0;
+    static long SHOCK_MS = 500;
 
     // por nivel 1..5
     /** Alcance de visao das etiquetas (multiplicador de 64 blocos): ~6 blocos. */
     static final float TAG_RANGE = 0.1f;
 
-    static final int[] MAX_TURRETS = {2, 3, 4, 5, 6};
-    static final int[] RANGE = {12, 14, 16, 18, 20};
-    static final int[] COOLDOWN = {20, 17, 14, 12, 10}; // ticks entre tiros
-    static final int MAX_POWER_DEVICES = 16;
-    static final double SHOT_COST = 5;
-    static final double FIREBALL_COST = 10;
+    static int[] MAX_TURRETS = {2, 3, 4, 5, 6};
+    static int[] RANGE = {12, 14, 16, 18, 20};
+    static int[] COOLDOWN = {20, 17, 14, 12, 10}; // ticks entre tiros
+    static int MAX_POWER_DEVICES = 16;
+    static double SHOT_COST = 5;
+    static double FIREBALL_COST = 10;
     /** Manutencao da torre ligada, por segundo, mesmo sem atirar. Sobe com o nivel (2.0 ate 3.0). */
     static double upkeep(int lvl) { return 2.0 + 0.25 * (lvl - 1); }
-    static final double INVERTER_RATE = 8;     // energia/s que um inversor converte
-    static final double INVERTER_EFF = 0.9;
-    static final int MAX_NET_NODES = 4096;
-    static final double POLE_RANGE = 24;
+    static double INVERTER_RATE = 8;     // energia/s que um inversor converte
+    static double INVERTER_EFF = 0.9;
+    static int MAX_NET_NODES = 4096;
+    static double POLE_RANGE = 24;
     /** Tiros que um cano aguenta (bola de fogo gasta 2). */
-    static final int BARREL_MAX = 300;
+    static int BARREL_MAX = 300;
     /** XP da Engenharia. Montar na bancada depende do item (xpFor). */
-    static final int XP_REPAIR = 8, XP_KILL = 2, XP_MECH = 2, XP_ANVIL = 4;
-    static final double XP_INDUSTRIAL = 2, XP_INGOT = 0.2, XP_MACHINE_ITEM = 0.25, XP_FORGE = 1;
+    static int XP_REPAIR = 8, XP_KILL = 2, XP_MECH = 2, XP_ANVIL = 4;
+    static double XP_INDUSTRIAL = 2, XP_INGOT = 0.2, XP_MACHINE_ITEM = 0.25, XP_FORGE = 1;
     static int xpFor(String type) {
         return switch (type) { case "cabo", "juncao" -> 2; case "cano" -> 4; case "torre", "fundicao" -> 10; case "torre_laser" -> 16; default -> MACHINES.contains(type) ? 12 : 6; };
     }
     /** Forja: energia por segundo enquanto trabalha, segundos por lote (9 pepitas viram 16 balas). */
-    static final double FORGE_RATE = 4;
+    static double FORGE_RATE = 4;
     static final int FORGE_TIME = 6, FORGE_IN = 9, FORGE_OUT = 16;
     /**
      * Balas: rajada de BURST balas por disparo (3x a cadencia da flecha), cada uma com pouco dano.
      * Flecha da ~6: cobre 1/3 disso (2), ferro metade (3). Energia por bala; cano gasta 1 (cobre)
      * ou 2 (ferro) por rajada.
      */
-    static final int BURST = 3;
-    static final double COPPER_DMG = 2, IRON_DMG = 3, COPPER_COST = 2, IRON_COST = 3;
+    static int BURST = 3;
+    static double COPPER_DMG = 2, IRON_DMG = 3, COPPER_COST = 2, IRON_COST = 3;
     /** Fundicao Termica: bloco de ferro/cobre vira 1 industrial em 20 s, queimando bloco de carvao ou lava. */
-    static final int INDUSTRIAL_TIME = 20, FUEL_COAL_BLOCK = 160, FUEL_LAVA = 200;
+    static int INDUSTRIAL_TIME = 20, FUEL_COAL_BLOCK = 160, FUEL_LAVA = 200;
     /** Fornalha eletrica: 2x mais rapida que a vanilla, 20 de energia por item. */
-    static final double SMELT_RATE = 4; static final int SMELT_TIME = 5;
+    static double SMELT_RATE = 4; static int SMELT_TIME = 5;
     /** Triturador: 1 minerio vira 1 triturado + 35% de chance de outro. */
-    static final double CRUSH_RATE = 5; static final int CRUSH_TIME = 4; static final double CRUSH_BONUS = 0.35;
+    static double CRUSH_RATE = 5; static int CRUSH_TIME = 4; static double CRUSH_BONUS = 0.35;
     /** Plantadeira: 1 energia por semente, ate 2 sementes a cada 2 s. */
-    static final double PLANT_COST = 1;
+    static double PLANT_COST = 1;
     /** Montadora: 5/s, 10 s por item. */
-    static final double ASSEMBLE_RATE = 5; static final int ASSEMBLE_TIME = 10;
+    static double ASSEMBLE_RATE = 5; static int ASSEMBLE_TIME = 10;
     /** Escudo: manutencao por segundo + energia por mob empurrado. */
-    static final double SHIELD_UPKEEP = 3, SHIELD_PUSH = 1;
+    static double SHIELD_UPKEEP = 3, SHIELD_PUSH = 1;
     /** Mineradora: 1 bloco a cada 3 s, 12 de energia por bloco, area 5x5. */
-    static final double MINE_COST = 12; static final int MINE_TIME = 3, MINE_R = 2;
+    static double MINE_COST = 12; static int MINE_TIME = 3, MINE_R = 2;
 
     static final class Device {
         final String type; final String world; final int x, y, z; final UUID owner;
@@ -128,7 +128,7 @@ final class Engineer implements Listener {
         String key() { return world + ":" + x + ":" + y + ":" + z; }
         Location center(World w) { return new Location(w, x + 0.5, y + 0.5, z + 0.5); }
         double cap() {
-            return switch (type) { case "carvao", "inversor" -> 400; case "geotermico", "solar" -> 200; case "bateria" -> 5000; default -> 0; };
+            return switch (type) { case "carvao", "inversor" -> 400; case "geotermico", "solar" -> 200; case "bateria" -> Settings.BATTERY_CAP; default -> 0; };
         }
         boolean isSource() { return cap() > 0; }
     }
@@ -196,6 +196,7 @@ final class Engineer implements Listener {
         recipes.add(new Recipe("trem", 5, costs(Material.FURNACE_MINECART, 1), 1, parts("chapa_aco", 4, "motor", 2, "processador", 1)));
         recipes.add(new Recipe("modulo_coleta", 5, costs(Material.HOPPER_MINECART, 1, Material.CHEST_MINECART, 1), 1, parts("chapa_ferro", 2, "circuito", 1)));
         recipes.add(new Recipe("modulo_isolante", 2, costs(Material.LEATHER, 2, Material.DRIED_KELP, 4), 1, parts("chapa_cobre", 1)));
+        Settings.applyRecipes(recipes);
     }
 
     private static Map<String, Integer> parts(Object... kv) {
@@ -1007,16 +1008,16 @@ final class Engineer implements Listener {
                     Block n = b.getRelative(f);
                     if (n.getType() == Material.LAVA && n.getBlockData() instanceof Levelled lv && lv.getLevel() == 0) lava++;
                 }
-                return lava * 0.5 * (w.getEnvironment() == World.Environment.NETHER ? 2 : 1);
+                return lava * Settings.GEN_GEO * (w.getEnvironment() == World.Environment.NETHER ? 2 : 1);
             }
             case "solar" -> {
                 if (w.getEnvironment() != World.Environment.NORMAL) return 0;
                 long t = w.getTime();
                 if (t > 12300 && t < 23850) return 0;
                 if (b.getRelative(BlockFace.UP).getLightFromSky() < 15) return 0;
-                return w.hasStorm() ? 0.5 : 1.5;
+                return w.hasStorm() ? Settings.GEN_SOLAR_STORM : Settings.GEN_SOLAR;
             }
-            case "carvao" -> { return d.burn > 0 ? 4 : 0; }
+            case "carvao" -> { return d.burn > 0 ? Settings.GEN_COAL : 0; }
             default -> { return 0; }
         }
     }
@@ -2098,7 +2099,7 @@ final class Engineer implements Listener {
 
     static boolean isTurret(String type) { return type.equals("torre") || type.equals("torre_laser"); }
 
-    static final double LASER_COST = 25, LASER_DMG = 8, LASER_RADIUS = 3.5;
+    static double LASER_COST = 25, LASER_DMG = 8, LASER_RADIUS = 3.5;
 
     private int tntIn(Block b) {
         int n = 0;
@@ -2536,7 +2537,7 @@ final class Engineer implements Listener {
     }
 
     static final String TAG_MARK = "bc_device_tag";
-    static final float TAG_SCALE = 0.55f;
+    static float TAG_SCALE = 0.55f;
 
     private static org.bukkit.util.Transformation tagScale(TextDisplay td) {
         org.bukkit.util.Transformation t = td.getTransformation();
