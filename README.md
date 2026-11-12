@@ -2,7 +2,10 @@
 
 **English** | [Portugues (pt-BR)](README.pt-BR.md)
 
-![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Version](https://img.shields.io/badge/version-0.14.0-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Version](https://img.shields.io/badge/version-0.14.0-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) ![Status](https://img.shields.io/badge/status-beta-orange)
+
+> **Beta.** Classforge is in active development: expect changes and rough edges. It is fully open source (MIT) and community ideas are welcome. Suggest features or report bugs in the [issues](https://github.com/matheus-fsc/classforge/issues/new/choose).
+
 
 A Paper plugin for **level-based skills** with no fixed classes. Every player levels Engineering, Exploration and Farming, and each level unlocks new content: defense turrets, power and machines, companions and teleporting, automatic planters and rare enchanted books. Everything is configurable (worlds, modules, balance and recipes).
 

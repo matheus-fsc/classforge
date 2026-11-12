@@ -2,6 +2,9 @@
 
 [English](README.md) | **Portugues (pt-BR)**
 
+> **Beta.** O Classforge esta em desenvolvimento ativo: pode mudar e ter arestas. E open source (MIT) e ideias da comunidade sao bem-vindas. Sugira recursos ou reporte problemas nos [issues](https://github.com/matheus-fsc/classforge/issues/new/choose).
+
+
 ![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.14.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
 
 Plugin Paper de **habilidades por nivel** sem classes fixas. Todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo: torres de defesa, energia e maquinas, companheiros e teleporte, plantadores automaticos e livros encantados raros. Tudo e configuravel (mundos, modulos, balanceamento e receitas). Mensagens em portugues (pt-BR).
