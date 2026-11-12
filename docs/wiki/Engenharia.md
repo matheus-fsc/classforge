@@ -2,7 +2,7 @@
 
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 
-![Niveis da Engenharia](../img/engenharia-niveis.png)
+![Niveis da Engenharia](../img/pt-br/engenharia-niveis.png)
 
 ## Niveis
 
@@ -56,7 +56,7 @@ Todas gastam energia da rede enquanto trabalham e so processam o que voce coloca
 
 ## Linha industrial (componentes)
 
-![Linha industrial](../img/linha-industrial.png)
+![Linha industrial](../img/pt-br/linha-industrial.png)
 
 As maquinas avancadas nao saem mais so de Ferro/Cobre Industrial: pedem pecas que so existem saindo de uma maquina especifica.
 
@@ -97,7 +97,7 @@ A bancada e o painel separam as receitas em abas: Defesa, Energia, Maquinas e Co
 
 ## Rede eletrica
 
-![Rede eletrica](../img/rede-eletrica.png)
+![Rede eletrica](../img/pt-br/rede-eletrica.png)
 
 - **Cabo** (corrente de cobre encerada): liga tudo que encosta nele. Qualquer corrente de cobre conduz.
 - **Juncao** (bloco de cobre encerado): conduz como o cabo, serve para curvas e emendas.

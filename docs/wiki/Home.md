@@ -4,7 +4,7 @@
 
 Mini wiki do Classforge, plugin Paper de habilidades por nivel. Cada pagina tem os diagramas e as tabelas de uma habilidade.
 
-![Visao geral](../img/visao-geral.png)
+![Visao geral](../img/pt-br/visao-geral.png)
 
 ## Paginas
 
@@ -17,15 +17,15 @@ Mini wiki do Classforge, plugin Paper de habilidades por nivel. Cada pagina tem 
 
 ## O que cada nivel melhora
 
-![Curvas por nivel](../img/curvas-nivel.png)
+![Curvas por nivel](../img/pt-br/curvas-nivel.png)
 
 ## Curva de XP
 
-![Curva de XP](../img/curva-xp.png)
+![Curva de XP](../img/pt-br/curva-xp.png)
 
 ## Configuracao
 
-![Mapa do config.yml](../img/mapa-config.png)
+![Mapa do config.yml](../img/pt-br/mapa-config.png)
 
 ## Regras gerais
 

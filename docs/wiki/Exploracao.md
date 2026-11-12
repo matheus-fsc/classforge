@@ -15,7 +15,7 @@ Alem do companheiro, da Ancora de Perola e do bonus de carne: os orbes de XP ren
 
 ## Livros Antigos
 
-![Livros Antigos](../img/livros-antigos.png)
+![Livros Antigos](../img/pt-br/livros-antigos.png)
 
 Baus de estrutura gerados pelo mapa podem trazer um livro (7% no nivel 1 ate 19% no nivel 5) com Veio, Replantio, Decapitacao, Protecao Antiga, Lenhador, Colheita, Arado, Sabedoria, Visao Noturna, Sereia, Molas ou Implantes. Clique com o livro sobre o item no inventario para aplicar.
 

@@ -22,6 +22,27 @@ from matplotlib import font_manager
 
 OUT = Path(__file__).resolve().parent / "img"
 OUT.mkdir(exist_ok=True)
+_out_dir = OUT
+
+# ---------------------------------------------------------------- idioma
+# Os textos sao escritos em pt-BR; no modo "en" cada texto passa pelo dicionario de diagrams_en.py.
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import matplotlib.text as _mtext
+from diagrams_en import translate as _translate
+
+_LANG = "pt"
+_missing = set()
+_orig_set_text = _mtext.Text.set_text
+
+
+def _set_text(self, s):
+    if _LANG == "en" and isinstance(s, str) and s.strip():
+        s = _translate(s, _missing)
+    return _orig_set_text(self, s)
+
+
+_mtext.Text.set_text = _set_text
 TEX = Path(__file__).resolve().parent / ".textures"
 
 
@@ -219,7 +240,7 @@ def style_axes(a):
 
 
 def save(fig, name):
-    fig.savefig(OUT / name, bbox_inches="tight", pad_inches=0.15)
+    fig.savefig(_out_dir / name, bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
     print("ok", name)
 
@@ -552,13 +573,21 @@ def mapa_config():
     save(fig, "mapa-config.png")
 
 
+ALL = [visao_geral, engenharia_niveis, linha_industrial, rede_eletrica, graficos_nivel, livros_antigos,
+       arquitetura, curva_xp, mapa_config]
+
+
+def render(lang, out):
+    global _LANG, _out_dir
+    _LANG, _out_dir = lang, out
+    out.mkdir(parents=True, exist_ok=True)
+    for f in ALL:
+        f()
+
+
 if __name__ == "__main__":
-    visao_geral()
-    engenharia_niveis()
-    linha_industrial()
-    rede_eletrica()
-    graficos_nivel()
-    livros_antigos()
-    arquitetura()
-    curva_xp()
-    mapa_config()
+    # ingles e o principal (docs/img); pt-BR fica em docs/img/pt-br
+    render("en", OUT)
+    render("pt", OUT / "pt-br")
+    if _missing:
+        print("sem traducao:", *sorted(_missing), sep="\n  ")

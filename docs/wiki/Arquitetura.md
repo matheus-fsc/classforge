@@ -4,7 +4,7 @@ Esta pagina e para quem vai mexer no codigo. Para configurar o plugin, veja a se
 
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 
-![Arquitetura](../img/arquitetura.png)
+![Arquitetura](../img/pt-br/arquitetura.png)
 
 ## Classes
 

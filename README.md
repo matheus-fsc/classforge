@@ -1,159 +1,150 @@
 # Classforge
 
-![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.14.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
+**English** | [Portugues (pt-BR)](README.pt-BR.md)
 
-Plugin Paper de **habilidades por nivel** sem classes fixas. Todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo: torres de defesa, energia e maquinas, companheiros e teleporte, plantadores automaticos e livros encantados raros. Tudo e configuravel (mundos, modulos, balanceamento e receitas). Mensagens em portugues (pt-BR).
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Version](https://img.shields.io/badge/version-0.14.0-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-Funciona sozinho em qualquer servidor Paper. Com o [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) ganha funcoes especiais: veja [Integracao com o HardcoreRoulette](#integracao-com-o-hardcoreroulette).
+A Paper plugin for **level-based skills** with no fixed classes. Every player levels Engineering, Exploration and Farming, and each level unlocks new content: defense turrets, power and machines, companions and teleporting, automatic planters and rare enchanted books. Everything is configurable (worlds, modules, balance and recipes).
 
-## Recursos
+In-game text is currently in Brazilian Portuguese (pt-BR). An English translation of the messages is planned.
 
-- **Engenharia**: torres de defesa (Sentinela e Laser), energia, cabos e postes, maquinas, linha industrial e Tuneladora.
-- **Exploracao**: companheiro, Ancora de Perola, bonus de XP e Livros Antigos em baus de estrutura.
-- **Plantacao**: Plantador de Cobre (golem que planta a partir de um bau) e colheita extra.
-- Menus proprios com receita 3x3 de cada item, etiquetas flutuantes e particulas de energia.
+Works on its own on any Paper server. With [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) it gains special features: see [HardcoreRoulette integration](#hardcoreroulette-integration).
 
-## Instalacao
+## Features
 
-1. Servidor **Paper 26.3** com **Java 25**.
-2. Coloque `Classforge.jar` em `plugins/` e reinicie.
-3. Opcional: [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) para as funcoes especiais.
+- **Engineering**: defense turrets (Sentry and Laser), power generation, cables and poles, machines, an industrial production chain and a Tunnel Borer.
+- **Exploration**: a companion pet, the Pearl Anchor teleport, XP bonuses and Ancient Books found in structure chests.
+- **Farming**: the Copper Planter (a golem that sows seeds from a chest) and extra harvest.
+- Custom menus with the 3x3 recipe of every item, floating status labels and power particles.
 
-Vindo da versao antiga (HardcoreRouletteClasses): troque o jar. Na primeira partida o Classforge copia os dados de `plugins/HardcoreRouletteClasses/`, e itens, maquinas e livros que ja existem no mundo continuam funcionando.
+## Installation
 
-## Integracao com o HardcoreRoulette
+1. A **Paper 26.3** server running **Java 25**.
+2. Drop `Classforge.jar` into `plugins/` and restart.
+3. Optional: [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) for the special features.
 
-O HardcoreRoulette e um plugin de hardcore em grupo em que cada vida e um mundo novo. Com ele instalado, o Classforge ganha:
+Upgrading from the old version (HardcoreRouletteClasses): just swap the jar. On first start Classforge copies the data from `plugins/HardcoreRouletteClasses/`, and the items, machines and books already in your worlds keep working.
 
-- **Vida por mundo**: os niveis ficam presos ao mundo da run e voltam ao nivel 1 quando a vida acaba (`progress.reset-on-new-world: true`, `worlds.mode: prefix`, `worlds.prefix: "hc_"`).
-- **XP dividido com a party**: parte do XP de habilidade vai para quem esta na party, com o mesmo alcance e fracao que o HardcoreRoulette usa (`progress.party-share`).
-- **Livros Antigos nas runs**: o loot de livros so aparece nos mundos de run.
+## HardcoreRoulette integration
 
-Sem o HardcoreRoulette, essas funcoes ficam desligadas e o resto funciona igual. A ligacao e feita por reflexao, sem dependencia de compilacao.
+HardcoreRoulette is a group hardcore plugin where every life is a brand new world. With it installed, Classforge adds:
 
-![Visao geral](docs/img/visao-geral.png)
+- **Life per world**: levels are tied to the run's world and go back to level 1 when the life ends (`progress.reset-on-new-world: true`, `worlds.mode: prefix`, `worlds.prefix: "hc_"`).
+- **Party XP sharing**: part of the skill XP goes to your party members, using HardcoreRoulette's range and ratio (`progress.party-share`).
+- **Ancient Books in runs**: book loot only appears in run worlds.
 
-## Mini wiki
+Without HardcoreRoulette these features are off and everything else works the same. The link uses HardcoreRoulette's official API as an optional dependency.
 
-| Pagina | O que tem |
-|--------|-----------|
-| [Inicio](docs/wiki/Home.md) | Visao geral, curvas por nivel, regras gerais |
-| [Engenharia](docs/wiki/Engenharia.md) | Torres, Torre Laser, energia, maquinas, linha industrial, rede, Tuneladora |
-| [Plantacao](docs/wiki/Plantacao.md) | Plantador de Cobre e colheita extra |
-| [Exploracao](docs/wiki/Exploracao.md) | Companheiro, Ancora de Perola, orbes, Livros Antigos |
-| [Arquitetura](docs/wiki/Arquitetura.md) | Classes Java, dados, geracao dos diagramas |
+![Overview](docs/img/visao-geral.png)
 
-## Estado atual (versao 0.14.0)
+## In game
 
-| Area | Estado | Observacao |
-|------|--------|------------|
-| Engenharia: torres, energia, rede | Pronto | Torre Sentinela agora pede motor e circuito |
-| Engenharia: linha industrial e maquinas | Pronto | Prensa, Torno, Bobinadeira, Cadinho, Gravadora |
-| Engenharia: Tuneladora | Pronto | Nivel 5, limite de 1 estacao |
-| Engenharia: Torre Laser | Novo, sem teste em jogo | Lanca TNT que nao explode; dano em area so em mobs hostis |
-| Exploracao: companheiro, ancora, orbes | Pronto | |
-| Exploracao: Livros Antigos (12) | Novo, sem teste em jogo | Loot de baus de estrutura |
-| Plantacao: Plantador de Cobre | Pronto | Receita visivel no painel |
-| Integracao com o HardcoreRoulette | Pronto | Vida por mundo e XP dividido com a party |
-| Logs e `/classe report` | Pronto | Log diario em `logs/`, relatorio sem segredos para issues |
-| Configuracao (config.yml) | Pronto | Mundos, modulos, balanceamento, receitas, `/classe reload` |
+Crafting recipes and plugin menus (rendered with the game's own textures and font, using the real menu layouts):
 
-Ideias em aberto: habilidade de Coleta, revisao de balanceamento depois de uma run completa.
+| Engineering Bench | Copper Planter | Pearl Anchor |
+|---|---|---|
+| ![Bench](docs/img/ingame/recipe-bancada.png) | ![Planter](docs/img/ingame/recipe-plantador.png) | ![Anchor](docs/img/ingame/recipe-ancora.png) |
 
-## Progressao
+![Skills menu](docs/img/ingame/menu-habilidades.png)
 
-![Curvas por nivel](docs/img/curvas-nivel.png)
+![Engineering panel](docs/img/ingame/menu-engenharia.png)
 
-| Nivel | Engenharia (XP) | Exploracao (XP) | Plantacao (XP) |
-|-------|-----------------|-----------------|----------------|
+![Defense catalog](docs/img/ingame/menu-defesa.png)
+
+## Progression
+
+![What each level improves](docs/img/curvas-nivel.png)
+
+| Level | Engineering (XP) | Exploration (XP) | Farming (XP) |
+|-------|------------------|------------------|--------------|
 | 1 | 0 | 0 | 0 |
 | 2 | 10 | 70 | 30 |
 | 3 | 35 | 265 | 105 |
 | 4 | 125 | 900 | 360 |
 | 5 | 350 | 2500 | 1000 |
 
-A curva comeca suave e fica ingreme nos niveis finais: `xp(n) = MAX x (0.1 x t + 0.9 x t^4)`, com `t = (n - 1) / 4`. Da para trocar os valores em `level-xp` no config.yml.
+The curve starts gentle and gets steep at the last levels: `xp(n) = MAX x (0.1 x t + 0.9 x t^4)`, with `t = (n - 1) / 4`. Change it with `level-xp` in config.yml.
 
-![Curva de XP](docs/img/curva-xp.png)
+![XP curve](docs/img/curva-xp.png)
 
-![Niveis da Engenharia](docs/img/engenharia-niveis.png)
+![Engineering levels](docs/img/engenharia-niveis.png)
 
-## Engenharia em uma imagem
+## Engineering at a glance
 
-![Linha industrial](docs/img/linha-industrial.png)
+![Industrial chain](docs/img/linha-industrial.png)
 
-![Rede eletrica](docs/img/rede-eletrica.png)
+![Power network](docs/img/rede-eletrica.png)
 
-Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Engenharia.md).
+Every machine, recipe and power cost is detailed on the [Engineering wiki page](docs/wiki/Engenharia.md) (pt-BR).
 
-## Livros Antigos
+## Ancient Books
 
-![Livros Antigos](docs/img/livros-antigos.png)
+![Ancient Books](docs/img/livros-antigos.png)
 
-## Configuracao
+## Configuration
 
-Tudo que era fixo no codigo agora fica em `plugins/Classforge/config.yml`, escrito comentado na primeira vez que o servidor liga ([modelo](src/main/resources/config.yml)). Os padroes sao os valores de antes, entao nada muda ate voce editar.
+Everything lives in `plugins/Classforge/config.yml`, written with comments on first start ([template](src/main/resources/config.yml)).
 
-![Mapa do config.yml](docs/img/mapa-config.png)
+![config.yml map](docs/img/mapa-config.png)
 
-| Secao | O que controla |
-|-------|----------------|
-| `worlds` | Em quais mundos as habilidades valem: por prefixo (`hc_`), todos ou uma lista |
-| `progress` | Zerar os niveis em mundo novo (vida nova) e dividir XP com a party |
-| `modules` | Liga ou desliga Engenharia, Exploracao, Plantacao e Livros Antigos |
-| `engineering` | XP por nivel, torres, balas, Torre Laser, geracao de energia, rede, maquinas, Tuneladora, XP de cada acao, etiquetas |
-| `engineering.recipes` | Cada receita da Bancada: ligar/desligar, nivel, materiais e componentes (o plugin escreve todas na primeira vez) |
-| `exploration` | XP por nivel, bonus nos orbes, Ancora de Perola |
-| `farming` | XP por nivel, raio, plantadores, ritmo e colheita extra |
-| `ancient-books` | Chance de achar, blocos do Veio e livros desligados |
+| Section | What it controls |
+|---------|------------------|
+| `worlds` | Which worlds skills apply to: all, by name prefix, or a list |
+| `progress` | Reset levels on a new world (new life) and share XP with the party |
+| `modules` | Turn Engineering, Exploration, Farming and Ancient Books on or off |
+| `engineering` | XP per level, turrets, bullets, Laser Turret, power generation, network, machines, Tunnel Borer, XP per action, labels |
+| `engineering.recipes` | Every bench recipe: enable/disable, level, materials and parts (the plugin writes them all on first start) |
+| `exploration` | XP per level, orb bonus, Pearl Anchor |
+| `farming` | XP per level, radius, planters, pace and extra harvest |
+| `ancient-books` | Find chance, Vein blocks and disabled books |
 
-`/classe reload` aplica os numeros sem reiniciar. Ligar ou desligar modulos e mudar receitas pede reinicio.
+`/classe reload` applies numbers without a restart. Turning modules on or off and changing recipes need a restart.
 
-O padrao de uma instalacao nova e o de servidor comum: `worlds.mode: all` e `progress.reset-on-new-world: false`. Para o HardcoreRoulette, veja a secao de integracao.
+A fresh install uses regular server defaults: `worlds.mode: all` and `progress.reset-on-new-world: false`. For HardcoreRoulette, see the integration section.
 
-## Reportar um problema
+## Reporting a problem
 
-1. Rode `/classe report` (precisa da permissao `classforge.admin`; no console tambem funciona).
-2. O plugin cria `plugins/Classforge/reports/report-<data>.txt` com a versao do plugin e do servidor, os plugins instalados, o `config.yml` sem segredos e as ultimas linhas do log.
-3. Abra um [issue](https://github.com/matheus-fsc/classforge/issues/new/choose) e anexe o arquivo.
+1. Run `/classe report` (needs `classforge.admin`; works from the console too).
+2. The plugin writes `plugins/Classforge/reports/report-<date>.txt` with the plugin and server versions, installed plugins, the `config.yml` without secrets and the latest log lines.
+3. Open an [issue](https://github.com/matheus-fsc/classforge/issues/new/choose) and attach the file.
 
-O log completo fica em `plugins/Classforge/logs/` (um arquivo por dia, guardado por 7 dias). Para investigar algo especifico, ligue `debug: true` no config.yml e rode `/classe reload`.
+The full log is in `plugins/Classforge/logs/` (one file per day, kept for 7 days). To investigate something specific, set `debug: true` in config.yml and run `/classe reload`.
 
-## Comandos
+## Commands
 
-| Comando | Descricao |
-|---------|-----------|
-| `/classe` (ou `/engenharia`, `/habilidades`) | Menu de habilidades |
-| `/classe info` | Nivel e status da Engenharia |
-| `/classe particulas` | Liga/desliga as particulas de energia |
-| `/classe admin <jogador> <nivel>` | Define o nivel (permissao `classforge.admin`) |
-| `/classe dar <item>` | Da um item do plugin (permissao `classforge.admin`) |
-| `/classe reload` | Recarrega o config.yml (permissao `classforge.admin`) |
-| `/classe report` | Gera um relatorio para anexar num issue (permissao `classforge.admin`) |
-| `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `classforge.admin`) |
+| Command | Description |
+|---------|-------------|
+| `/classe` (or `/classforge`, `/habilidades`) | Skills menu |
+| `/classe info` | Your levels and Engineering status |
+| `/classe particulas` | Toggle power particles |
+| `/classe admin <player> <level> [exploracao\|plantacao]` | Set a level (`classforge.admin`) |
+| `/classe dar <item>` | Give a plugin item (`classforge.admin`) |
+| `/classe reload` | Reload config.yml (`classforge.admin`) |
+| `/classe report` | Create a report to attach to an issue (`classforge.admin`) |
+| `/classe give <engenheiro\|explorador\|plantador\|livros> [player]` | Test kit; `livros` gives one of each Ancient Book (`classforge.admin`) |
 
-## Permissoes
+## Permissions
 
-| Permissao | Padrao | Descricao |
-|-----------|--------|-----------|
-| `classforge.admin` | op | `/classe admin`, `dar`, `give`, `reload` e `report` |
+| Permission | Default | Description |
+|------------|---------|-------------|
+| `classforge.admin` | op | `/classe admin`, `dar`, `give`, `reload` and `report` |
 
-## Build
+## Building
 
 ```
 mvn package
 ```
 
-O jar sai em `target/Classforge.jar`. Copie para `plugins/`.
+The jar ends up in `target/Classforge.jar`.
 
-A integracao usa a API do HardcoreRoulette como dependencia opcional: antes de compilar, rode `mvn install` no repositorio do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette).
+The integration compiles against the HardcoreRoulette API as an optional dependency: run `mvn install` in the [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) repository first.
 
-Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib e do Minecraft instalado para os icones; detalhes em [Arquitetura](docs/wiki/Arquitetura.md)).
+To regenerate the images: `python docs/diagrams.py` and `python docs/ingame.py` (needs matplotlib, Pillow and a local Minecraft install for the textures; details on the [Architecture](docs/wiki/Arquitetura.md) page).
 
-## Para desenvolvedores
+## For developers
 
-Estrutura do codigo, arquivos de dados e como gerar os diagramas: [Arquitetura](docs/wiki/Arquitetura.md).
+Code structure, data files and how the diagrams are made: [Architecture](docs/wiki/Arquitetura.md) (pt-BR).
 
-## Licenca
+## License
 
 MIT
