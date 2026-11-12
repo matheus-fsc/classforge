@@ -1,5 +1,5 @@
 name: Classforge
-version: 0.14.0
+version: 0.15.0
 main: dev.math.classforge.Classforge
 api-version: "26.3"
 author: matheus-fsc

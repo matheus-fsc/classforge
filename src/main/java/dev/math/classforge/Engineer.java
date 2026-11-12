@@ -2171,6 +2171,7 @@ final class Engineer implements Listener {
             e.setYield(0);
             e.setIsIncendiary(false);
             e.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+            e.getPersistentDataContainer().set(Classforge.key("turret-origin"), PersistentDataType.STRING, t.x + "," + t.y + "," + t.z); // SmartHordes acha a torre
             e.addScoreboardTag("bc_laser_tnt");
         });
         tnt.setVelocity(v);
@@ -2343,6 +2344,7 @@ final class Engineer implements Listener {
         a.setDamage(2.0 + 0.25 * (lvl - 1));
         if (lvl >= 3 && Math.random() < 0.3) a.setFireTicks(100);
         a.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+        a.getPersistentDataContainer().set(Classforge.key("turret-origin"), PersistentDataType.STRING, t.x + "," + t.y + "," + t.z); // SmartHordes acha a torre
     }
 
     private final NamespacedKey bulletKey() { return Classforge.key("bullet-dmg"); }
@@ -2357,6 +2359,7 @@ final class Engineer implements Listener {
             f.setGravity(false);
             f.setVelocity(dir.clone().multiply(3.5));
             f.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+            f.getPersistentDataContainer().set(Classforge.key("turret-origin"), PersistentDataType.STRING, t.x + "," + t.y + "," + t.z); // SmartHordes acha a torre
             f.getPersistentDataContainer().set(bulletKey(), PersistentDataType.DOUBLE, dmg);
         });
         Bukkit.getScheduler().runTaskLater(plugin, () -> { if (sb.isValid()) sb.remove(); }, 30L);
@@ -2390,6 +2393,7 @@ final class Engineer implements Listener {
             f.setDirection(d2);
             f.setVelocity(d2.clone().multiply(1.8));
             f.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
+            f.getPersistentDataContainer().set(Classforge.key("turret-origin"), PersistentDataType.STRING, t.x + "," + t.y + "," + t.z); // SmartHordes acha a torre
         });
     }
 
