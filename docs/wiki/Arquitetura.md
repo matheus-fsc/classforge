@@ -1,4 +1,6 @@
-# Arquitetura
+# Arquitetura (para desenvolvedores)
+
+Esta pagina e para quem vai mexer no codigo. Para configurar o plugin, veja a secao Configuracao do README.
 
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 

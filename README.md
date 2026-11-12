@@ -93,6 +93,8 @@ Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Eng
 
 Tudo que era fixo no codigo agora fica em `plugins/Classforge/config.yml`, escrito comentado na primeira vez que o servidor liga ([modelo](src/main/resources/config.yml)). Os padroes sao os valores de antes, entao nada muda ate voce editar.
 
+![Mapa do config.yml](docs/img/mapa-config.png)
+
 | Secao | O que controla |
 |-------|----------------|
 | `worlds` | Em quais mundos as habilidades valem: por prefixo (`hc_`), todos ou uma lista |
@@ -136,11 +138,9 @@ O jar sai em `target/Classforge.jar`. Copie para `plugins/`.
 
 Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib e do Minecraft instalado para os icones; detalhes em [Arquitetura](docs/wiki/Arquitetura.md)).
 
-## Arquitetura
+## Para desenvolvedores
 
-![Arquitetura](docs/img/arquitetura.png)
-
-Dados em `plugins/Classforge/`: `config.yml`, `players.yml`, `devices.yml`, `explorer.yml` e `farm.yml`. Mais em [Arquitetura](docs/wiki/Arquitetura.md).
+Estrutura do codigo, arquivos de dados e como gerar os diagramas: [Arquitetura](docs/wiki/Arquitetura.md).
 
 ## Licenca
 

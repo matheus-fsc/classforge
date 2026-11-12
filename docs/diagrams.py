@@ -408,32 +408,25 @@ def rede_eletrica():
 # ---------------------------------------------------------------- 5. graficos de nivel
 def graficos_nivel():
     lv = [1, 2, 3, 4, 5]
-    fig, axs = plt.subplots(1, 3, figsize=(15, 4.4), dpi=150)
-    fig.suptitle("Curvas por nivel", fontsize=16, weight="bold", x=0.02, ha="left")
-
-    a = axs[0]
-    a.plot(lv, [2, 3, 4, 5, 6], marker="o", color=ENG, lw=2.2, label="torres")
-    a.plot(lv, [x / 4 for x in [12, 14, 16, 18, 20]], marker="s", color=GOLD, lw=2.2, label="alcance / 4")
-    a.plot(lv, [1.0, 1.2, 1.4, 1.7, 2.0], marker="^", color=MUTED, lw=2.2, label="tiros/s")
-    a.set_title("Engenharia", loc="left", weight="bold", color=ENG)
-
-    a = axs[1]
-    a.bar(lv, [4, 8, 12, 16, 20], color=EXP, width=0.6, label="bonus orbes %")
-    a.plot(lv, [7, 10, 13, 16, 19], marker="o", color=GOLD, lw=2.2, label="chance livro %")
-    a.set_title("Exploracao", loc="left", weight="bold", color=EXP)
-
-    a = axs[2]
-    a.bar(lv, [5, 10, 15, 20, 25], color=FARM, width=0.6, label="colheita extra %")
-    a.plot(lv, [4, 5, 6, 7, 8], marker="o", color=GOLD, lw=2.2, label="raio do golem")
-    a.plot(lv, [1, 2, 2, 3, 4], marker="s", color=MUTED, lw=2.2, label="golems")
-    a.set_title("Plantacao", loc="left", weight="bold", color=FARM)
-
-    for a in axs:
+    panels = [
+        ("Torres por jogador", ENG, [2, 3, 4, 5, 6], "", "engineering.turrets.max-per-level"),
+        ("Alcance das torres (blocos)", ENG, [12, 14, 16, 18, 20], "", "engineering.turrets.range-per-level"),
+        ("Bonus no XP dos orbes", EXP, [4, 8, 12, 16, 20], "%", "exploration.orb-xp-bonus-percent"),
+        ("Colheita extra", FARM, [5, 10, 15, 20, 25], "%", "farming.harvest-bonus-percent"),
+    ]
+    fig, axs = plt.subplots(1, 4, figsize=(16, 4.2), dpi=150)
+    fig.suptitle("O que cada nivel melhora (padrao)", fontsize=16, weight="bold", x=0.015, ha="left")
+    for a, (title, color, vals, unit, key) in zip(axs, panels):
+        bars = a.bar(lv, vals, color=color, width=0.62)
+        for r, v in zip(bars, vals):
+            a.text(r.get_x() + r.get_width() / 2, v, f"{v}{unit}", ha="center", va="bottom", fontsize=10, weight="bold", color=INK)
+        a.set_title(title, loc="left", weight="bold", color=color, fontsize=11.5)
         style_axes(a)
-        a.set_xticks(lv)
-        a.set_xlabel("nivel")
-        a.legend(frameon=False, fontsize=9, loc="upper left")
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+        a.set_yticks([])
+        a.set_xticks(lv, [f"nv {n}" for n in lv])
+        a.set_ylim(0, max(vals) * 1.18)
+        a.text(0, -0.2, key, transform=a.transAxes, fontsize=8.5, color=MUTED, family="monospace")
+    fig.tight_layout(rect=(0, 0.03, 1, 0.92))
     save(fig, "curvas-nivel.png")
 
 
@@ -504,25 +497,59 @@ def curva_xp():
               ("Exploracao", EXP, 2500, [0, 150, 500, 1200, 2500], [0, 70, 265, 900, 2500]),
               ("Plantacao", FARM, 1000, [0, 60, 200, 500, 1000], [0, 30, 105, 360, 1000])]
     fig, axs = plt.subplots(1, 3, figsize=(15, 4.4), dpi=150)
-    fig.suptitle("Curva de XP por nivel: xp(n) = MAX x (0.1 t + 0.9 t^4), t = (n - 1) / 4",
-                 fontsize=14, weight="bold", x=0.02, ha="left")
+    fig.suptitle("XP total para chegar em cada nivel (padrao)", fontsize=16, weight="bold", x=0.02, ha="left")
+    fig.text(0.02, 0.86, "Sobe devagar no comeco e acelera no fim. Ajuste em level-xp de cada habilidade "
+             "(engineering, exploration, farming).", fontsize=10.5, color=MUTED)
     t = np.linspace(0, 1, 200)
     for a, (name, color, mx, old, new) in zip(axs, curves):
         y = mx * (0.1 * t + 0.9 * t ** 4)
         a.fill_between(1 + 4 * t, y, color=color, alpha=0.10)
-        a.plot(1 + 4 * t, y, color=color, lw=2.4, label="nova (formula)")
+        a.plot(1 + 4 * t, y, color=color, lw=2.4)
         a.plot(range(1, 6), new, "o", color=color, ms=7)
-        a.plot(range(1, 6), old, "--o", color=LINE, lw=1.6, ms=5, label="antiga")
         for n, v in zip(range(1, 6), new):
-            a.annotate(str(v), (n, v), textcoords="offset points", xytext=(-8, 8), fontsize=9, color=INK, ha="right")
+            a.annotate(f"{v} XP", (n, v), textcoords="offset points", xytext=(-8, 8), fontsize=9.5, color=INK,
+                       ha="right", weight="bold")
         a.set_title(name, loc="left", weight="bold", color=color)
         style_axes(a)
-        a.set_xticks(range(1, 6))
-        a.set_xlabel("nivel")
-        a.set_ylabel("XP total para chegar")
-        a.legend(frameon=False, fontsize=9, loc="upper left")
-    fig.tight_layout(rect=(0, 0, 1, 0.92))
+        a.set_xticks(range(1, 6), [f"nv {n}" for n in range(1, 6)])
+        a.set_yticks([])
+        a.set_ylim(0, mx * 1.15)
+    fig.tight_layout(rect=(0, 0, 1, 0.84))
     save(fig, "curva-xp.png")
+
+
+# ---------------------------------------------------------------- 9. mapa da configuracao
+CONFIG_MAP = [
+    # (secao, cor, icone, titulo, linhas)
+    ("worlds", LINE, "exploracao", "Onde vale", ["Todos os mundos, por prefixo", "ou uma lista de mundos."]),
+    ("progress", LINE, "jogador", "Progresso", ["Zerar niveis a cada vida;", "dividir XP com a party."]),
+    ("modules", LINE, "bancada", "Modulos", ["Liga ou desliga cada", "habilidade inteira."]),
+    ("engineering.turrets", ENG, "torre", "Torres", ["Quantas, alcance, cadencia,", "desgaste do cano, Laser."]),
+    ("engineering.energy", ENG, "solar", "Energia", ["Quanto cada gerador produz,", "bateria e inversor."]),
+    ("engineering.machines", ENG, "triturador", "Maquinas", ["Tempo e gasto de energia", "de cada maquina."]),
+    ("engineering.recipes", ENG, "ferro_industrial", "Receitas", ["Nivel, materiais e pecas;", "desligar itens."]),
+    ("engineering.tunnel", ENG, "trem", "Tuneladora", ["Velocidade, energia,", "broca e comprimento."]),
+    ("exploration", EXP, "ancora", "Exploracao", ["XP por nivel, ancora,", "bonus nos orbes."]),
+    ("farming", FARM, "golem", "Plantacao", ["Raio, plantadores, ritmo", "e colheita extra."]),
+    ("ancient-books", EXP, "livro", "Livros Antigos", ["Chance de achar e", "livros desligados."]),
+    ("*.level-xp", GOLD, "party", "Curva de XP", ["XP para cada nivel", "de cada habilidade."]),
+]
+
+
+def mapa_config():
+    fig, ax = canvas(16, 7.6, "Mapa do config.yml",
+                     "Cada card e uma secao de plugins/Classforge/config.yml. Use /classe reload depois de editar "
+                     "(modulos e receitas pedem reinicio).")
+    cols, w, h, gx, gy = 4, 3.65, 1.55, 0.25, 0.35
+    for i, (key, color, ic, title, lines) in enumerate(CONFIG_MAP):
+        col, row = i % cols, i // cols
+        x = 0.4 + col * (w + gx)
+        y = 4.75 - row * (h + gy)
+        box(ax, x, y, w, h, title, lines, color, fs=9.8, icon=ic, icon_size=0.45)
+        ax.text(x + 0.22, y + 0.22, key, fontsize=8.8, color=MUTED, family="monospace", va="center", zorder=4)
+    ax.text(0.4, 0.35, "Cinza: geral   Vermelho: Engenharia   Azul: Exploracao   Verde: Plantacao   "
+            "Amarelo: vale para todas", fontsize=10, color=MUTED)
+    save(fig, "mapa-config.png")
 
 
 if __name__ == "__main__":
@@ -534,3 +561,4 @@ if __name__ == "__main__":
     livros_antigos()
     arquitetura()
     curva_xp()
+    mapa_config()

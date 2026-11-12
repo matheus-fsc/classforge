@@ -13,15 +13,19 @@ Mini wiki do Classforge, plugin Paper de habilidades por nivel. Cada pagina tem 
 | [Engenharia](Engenharia.md) | Niveis, torres, Torre Laser, energia, maquinas, linha industrial, rede eletrica, Tuneladora |
 | [Plantacao](Plantacao.md) | Plantador de Cobre, niveis, colheita extra |
 | [Exploracao](Exploracao.md) | Chunks, companheiro, Ancora de Perola, orbes, Livros Antigos |
-| [Arquitetura](Arquitetura.md) | Classes Java, arquivos de dados, como gerar os diagramas |
+| [Arquitetura](Arquitetura.md) | Para desenvolvedores: classes Java, arquivos de dados, diagramas |
 
-## Curvas por nivel
+## O que cada nivel melhora
 
 ![Curvas por nivel](../img/curvas-nivel.png)
 
 ## Curva de XP
 
 ![Curva de XP](../img/curva-xp.png)
+
+## Configuracao
+
+![Mapa do config.yml](../img/mapa-config.png)
 
 ## Regras gerais
 
