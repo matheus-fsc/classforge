@@ -1,24 +1,28 @@
-# HardcoreRouletteClasses: configuracao
+# Classforge: configuracao
 #
 # Todos os valores abaixo sao os padroes do plugin. Chave que faltar e recriada com o padrao
 # quando o servidor liga. /classe reload aplica os numeros sem reiniciar; ligar ou desligar
 # modulos e mudar receitas precisa reiniciar.
 #
 # Listas "por nivel" sempre tem 5 valores: nivel 1, 2, 3, 4 e 5.
+#
+# Curva de XP (level-xp) padrao: xp(n) = MAX x (0.1 x t + 0.9 x t^4), com t = (n - 1) / 4.
+# Comeco suave (a parte linear nunca deixa a subida zerar) e angulo forte nos niveis 4 e 5.
 
 # Em quais mundos as habilidades valem (XP, loot de livros, regras de vida).
+# Com o HardcoreRoulette: mode: prefix, prefix: "hc_" e progress.reset-on-new-world: true.
 worlds:
-  # prefix: mundos cujo nome comeca com "prefix" (o _nether e o _the_end do mesmo mundo contam junto)
   # all:    todos os mundos
+  # prefix: mundos cujo nome comeca com "prefix" (o _nether e o _the_end do mesmo mundo contam junto)
   # list:   so os mundos em "list"
-  mode: prefix
+  mode: all
   prefix: "hc_"
   list: []
 
 progress:
-  # Zera os niveis quando o jogador aparece num mundo valido diferente do que ganhou o XP
-  # (no HardcoreRoulette cada vida e um mundo novo). Desligue em servidor normal.
-  reset-on-new-world: true
+  # Zera os niveis quando o jogador aparece num mundo valido diferente do que ganhou o XP.
+  # Feito para o HardcoreRoulette, onde cada vida e um mundo novo. Desligue em servidor normal.
+  reset-on-new-world: false
   # Divide o XP de classe com a party (precisa do HardcoreRoulette; a fracao vem dele).
   party-share: true
 
@@ -31,7 +35,7 @@ modules:
 
 # ------------------------------------------------------------------ Engenharia
 engineering:
-  level-xp: [0, 25, 75, 175, 350]
+  level-xp: [0, 10, 35, 125, 350]
 
   turrets:
     max-per-level: [2, 3, 4, 5, 6]
@@ -121,7 +125,7 @@ engineering:
 
 # ------------------------------------------------------------------ Exploracao
 exploration:
-  level-xp: [0, 150, 500, 1200, 2500]
+  level-xp: [0, 70, 265, 900, 2500]
   orb-xp-bonus-percent: [4, 8, 12, 16, 20]
   anchor:
     min-level: 2
@@ -132,7 +136,7 @@ exploration:
 
 # ------------------------------------------------------------------ Plantacao
 farming:
-  level-xp: [0, 60, 200, 500, 1000]
+  level-xp: [0, 30, 105, 360, 1000]
   radius-per-level: [4, 5, 6, 7, 8]
   max-planters-per-level: [1, 2, 2, 3, 4]
   seconds-per-seed-per-level: [4, 3, 3, 2, 1]

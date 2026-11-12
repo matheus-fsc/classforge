@@ -22,7 +22,7 @@ Baus de estrutura gerados pelo mapa podem trazer um livro (7% no nivel 1 ate 19%
 | Nivel | XP | Alcance da Ancora | Bonus nos orbes | Chance de livro |
 |-------|------|------|-----|-----|
 | 1 | 0 | sem ancora | 4% | 7% |
-| 2 | 150 | 500 | 8% | 10% |
-| 3 | 500 | 1000 | 12% | 13% |
-| 4 | 1200 | 2000 | 16% | 16% |
+| 2 | 70 | 500 | 8% | 10% |
+| 3 | 265 | 1000 | 12% | 13% |
+| 4 | 900 | 2000 | 16% | 16% |
 | 5 | 2500 | 4000 | 20% | 19% |

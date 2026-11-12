@@ -1,4 +1,4 @@
-package dev.math.hrclasses;
+package dev.math.classforge;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -65,15 +65,15 @@ final class Relics implements Listener {
     };
     static int[] VEIN = {0, 6, 12, 20};
 
-    private final HardcoreRouletteClasses plugin;
+    private final Classforge plugin;
     private final NamespacedKey bookKey;
     private final Map<String, NamespacedKey> keys = new HashMap<>();
     private final Set<UUID> veining = new HashSet<>();
 
-    Relics(HardcoreRouletteClasses plugin) {
+    Relics(Classforge plugin) {
         this.plugin = plugin;
-        bookKey = new NamespacedKey(plugin, "relic_book");
-        for (Relic r : RELICS) keys.put(r.id(), new NamespacedKey(plugin, "relic_" + r.id()));
+        bookKey = Classforge.key("relic_book");
+        for (Relic r : RELICS) keys.put(r.id(), Classforge.key("relic_" + r.id()));
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::wornTick, 40L, 40L);
     }
@@ -182,7 +182,7 @@ final class Relics implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onLoot(LootGenerateEvent e) {
         if (!(e.getEntity() instanceof Player p) || e.getInventoryHolder() == null) return;
-        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
+        if (!Classforge.isRunWorld(p.getWorld())) return;
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
         int lvl = plugin.explorerLevel(p.getUniqueId());
         if (rnd.nextDouble() >= findChance(lvl)) return;

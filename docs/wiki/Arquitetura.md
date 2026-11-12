@@ -8,7 +8,7 @@
 
 | Classe | Papel |
 |--------|-------|
-| `HardcoreRouletteClasses` | Classe principal: comandos, XP e niveis das tres habilidades, divisao de XP com a party |
+| `Classforge` | Classe principal: comandos, XP e niveis das tres habilidades, divisao de XP com a party |
 | `Engineer` | Bancada, torres (Sentinela e Laser), geradores, bateria, cabos, postes, etiquetas, maquinas simples |
 | `Factory` | Linha industrial (Prensa, Torno, Bobinadeira, Cadinho, Gravadora, Laminadora) e a tela das maquinas |
 | `Tunnel` | Estacao, Trem Tunelador, brocas e Modulo de Coleta |
@@ -34,7 +34,7 @@ O plugin nao depende do HardcoreRoulette para compilar. A divisao de XP com a pa
 | `explorer.yml` | Companheiros e ancoras |
 | `farm.yml` | Plantadores |
 
-Todos em `plugins/HardcoreRouletteClasses/`.
+Todos em `plugins/Classforge/`.
 
 ## Diagramas
 

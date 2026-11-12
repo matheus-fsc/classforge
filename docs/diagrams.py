@@ -8,7 +8,7 @@ Requer matplotlib. Os icones dos itens saem das texturas do Minecraft instalado 
 Sem o jar, ou com MC_TEXTURES=off, os diagramas saem sem icones. MC_JAR aponta um jar especifico.
 
 Os numeros aqui espelham o codigo (Engineer, Farmer, Explorer, Relics,
-HardcoreRouletteClasses); ao mudar um balanceamento, atualize a tabela correspondente e rode de novo.
+Classforge); ao mudar um balanceamento, atualize a tabela correspondente e rode de novo.
 """
 import os
 import zipfile
@@ -17,7 +17,8 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
+from matplotlib.patches import Rectangle, FancyArrowPatch
+from matplotlib import font_manager
 
 OUT = Path(__file__).resolve().parent / "img"
 OUT.mkdir(exist_ok=True)
@@ -131,11 +132,14 @@ def draw_icon(ax, key, cx, cy, size):
     if img is None:
         return False
     h = size / 2
-    ax.imshow(img, extent=(cx - h, cx + h, cy - h, cy + h), interpolation="nearest", aspect="auto", zorder=5)
+    ax.imshow(img, extent=(cx - h, cx + h, cy - h, cy + h), interpolation="nearest", aspect="auto", zorder=6)
     return True
 
 # ---------------------------------------------------------------- estilo
-BG = "#ffffff"
+BG = "#f6f7f9"       # fundo da pagina
+CARD = "#ffffff"
+EDGE = "#e2e5ea"
+SHADOW = "#e9ebef"
 INK = "#1f2328"
 MUTED = "#57606a"
 LINE = "#8c959f"
@@ -145,8 +149,11 @@ FARM = "#3c9d5d"    # Plantacao
 GOLD = "#e0a100"    # componentes / destaque
 SOFT = {ENG: "#fbe9eb", EXP: "#e6f2f8", FARM: "#e8f5ec", GOLD: "#fdf3d6", LINE: "#f3f4f6"}
 
+_FONTS = {f.name for f in font_manager.fontManager.ttflist}
+FONT = next((f for f in ("Inter", "Segoe UI", "Helvetica Neue", "Arial") if f in _FONTS), "DejaVu Sans")
+
 plt.rcParams.update({
-    "font.family": "DejaVu Sans",
+    "font.family": FONT,
     "font.size": 10,
     "text.color": INK,
     "axes.edgecolor": LINE,
@@ -167,9 +174,9 @@ def canvas(w, h, title=None, sub=None):
     ax.axis("off")
     ax.autoscale(False)
     if title:
-        ax.text(0.4, h - 0.45, title, fontsize=17, weight="bold", va="center")
+        ax.text(0.4, h - 0.45, title, fontsize=18, weight="bold", va="center")
     if sub:
-        ax.text(0.4, h - 0.85, sub, fontsize=10, color=MUTED, va="center")
+        ax.text(0.4, h - 0.85, sub, fontsize=10.5, color=MUTED, va="center")
     return fig, ax
 
 
@@ -177,28 +184,38 @@ def box(ax, x, y, w, h, title, lines=(), color=LINE, fs=10, title_fs=11.5, align
         icon_size=0.55):
     """Caixa com faixa colorida a esquerda. (x, y) e o canto inferior esquerdo.
     icon: textura grande no canto superior direito. icons: uma por linha (None = sem icone)."""
-    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0,rounding_size=0.12",
-                                fc=SOFT.get(color, "#f6f8fa"), ec=color, lw=1.4))
-    ax.add_patch(FancyBboxPatch((x, y), 0.09, h, boxstyle="round,pad=0,rounding_size=0.04",
-                                fc=color, ec="none"))
-    tx = x + 0.25 if align == "left" else x + w / 2
+    ax.add_patch(Rectangle((x + 0.035, y - 0.045), w, h, fc=SHADOW, ec="none", zorder=1))
+    ax.add_patch(Rectangle((x, y), w, h, fc=CARD, ec=EDGE, lw=0.8, zorder=2))
+    ax.add_patch(Rectangle((x, y + h - 0.06), w, 0.06, fc=color, ec="none", zorder=3))
+    tx = x + 0.22 if align == "left" else x + w / 2
     ha = "left" if align == "left" else "center"
-    ax.text(tx, y + h - 0.28, title, fontsize=title_fs, weight="bold", va="center", ha=ha)
+    ax.text(tx, y + h - 0.34, title, fontsize=title_fs, weight="bold", va="center", ha=ha, zorder=4)
     if icon:
         sz = min(icon_size, h - 0.25)
-        draw_icon(ax, icon, x + w - 0.15 - sz / 2, y + h - 0.12 - sz / 2, sz)
+        draw_icon(ax, icon, x + w - 0.15 - sz / 2, y + h - 0.16 - sz / 2, sz)
     for i, ln in enumerate(lines):
-        ly = y + h - 0.62 - i * 0.29
+        ly = y + h - 0.68 - i * 0.29
         k = icons[i] if icons and i < len(icons) else None
         if k and draw_icon(ax, k, tx + 0.11, ly, 0.24):
-            ax.text(tx + 0.32, ly, ln, fontsize=fs, color=INK, va="center", ha=ha)
+            ax.text(tx + 0.32, ly, ln, fontsize=fs, color="#3d444d", va="center", ha=ha, zorder=4)
         else:
-            ax.text(tx, ly, ln, fontsize=fs, color=INK, va="center", ha=ha)
+            ax.text(tx, ly, ln, fontsize=fs, color="#3d444d", va="center", ha=ha, zorder=4)
 
 
-def arrow(ax, a, b, color=LINE, rad=0.0, lw=1.6, style="-|>"):
-    ax.add_patch(FancyArrowPatch(a, b, arrowstyle=style, mutation_scale=14, color=color, lw=lw,
-                                 connectionstyle=f"arc3,rad={rad}", shrinkA=2, shrinkB=2))
+def arrow(ax, a, b, color=LINE, rad=0.0, lw=1.3, style="-|>"):
+    ax.add_patch(FancyArrowPatch(a, b, arrowstyle=style, mutation_scale=11, color=color, lw=lw, alpha=0.85,
+                                 connectionstyle=f"arc3,rad={rad}", shrinkA=3, shrinkB=3, zorder=1.5))
+
+
+def style_axes(a):
+    """Grafico no mesmo visual dos cards: fundo branco, grade leve, sem molduras."""
+    a.set_facecolor(CARD)
+    a.grid(axis="y", color="#edf0f3", lw=0.9)
+    a.set_axisbelow(True)
+    for sp in ("top", "right", "left"):
+        a.spines[sp].set_visible(False)
+    a.spines["bottom"].set_color(EDGE)
+    a.tick_params(length=0)
 
 
 def save(fig, name):
@@ -209,15 +226,15 @@ def save(fig, name):
 
 # ---------------------------------------------------------------- 1. visao geral
 def visao_geral():
-    fig, ax = canvas(14, 7.0, "HardcoreRouletteClasses: habilidades",
+    fig, ax = canvas(14, 7.0, "Classforge: habilidades",
                      "Ninguem escolhe classe: todo jogador sobe as tres. O nivel libera o conteudo.")
-    box(ax, 5.2, 4.2, 3.6, 1.35, "Jogador (vida hardcore)",
-        ["XP preso ao mundo hc_* da run", "Morreu: tudo volta ao nivel 1"], LINE, align="center", icon="jogador")
+    box(ax, 5.2, 4.2, 3.6, 1.35, "Jogador",
+        ["Niveis 1 a 5 em cada habilidade", "HardcoreRoulette: zera a cada vida"], LINE, align="center", icon="jogador")
 
     box(ax, 0.4, 0.9, 4.2, 2.6, "Engenharia", [
         "Sobe: fundir, montar na bancada,",
         "fornalha, maquinas, abates de torre",
-        "XP: 0 / 25 / 75 / 175 / 350",
+        "XP: 0 / 10 / 35 / 125 / 350",
         "",
         "Libera: torres, energia, cabos,",
         "maquinas, linha industrial,",
@@ -225,7 +242,7 @@ def visao_geral():
     ], ENG, icon="engenharia")
     box(ax, 4.9, 0.9, 4.2, 2.6, "Exploracao", [
         "Sobe: cada chunk novo visitado",
-        "XP: 0 / 150 / 500 / 1200 / 2500",
+        "XP: 0 / 70 / 265 / 900 / 2500",
         "",
         "Libera: companheiro (ritual de velas),",
         "Ancora de Perola (500 a 4000 blocos),",
@@ -235,7 +252,7 @@ def visao_geral():
     box(ax, 9.4, 0.9, 4.2, 2.6, "Plantacao", [
         "Sobe: colher maduro (+1 a cada 4),",
         "sementes dos plantadores (+1 a cada 10)",
-        "XP: 0 / 60 / 200 / 500 / 1000",
+        "XP: 0 / 30 / 105 / 360 / 1000",
         "",
         "Libera: Plantador de Cobre (golem),",
         "mais golems, raio maior,",
@@ -269,7 +286,7 @@ ENG_UNLOCKS = {
 def engenharia_niveis():
     fig, ax = canvas(15, 5.6, "Engenharia: o que cada nivel libera",
                      "Torres por nivel 2 a 6, alcance 12 a 20 blocos, 1.0 a 2.0 tiros por segundo")
-    xp = [0, 25, 75, 175, 350]
+    xp = [0, 10, 35, 125, 350]
     turrets = [2, 3, 4, 5, 6]
     rng = [12, 14, 16, 18, 20]
     for i in range(5):
@@ -412,10 +429,9 @@ def graficos_nivel():
     a.set_title("Plantacao", loc="left", weight="bold", color=FARM)
 
     for a in axs:
+        style_axes(a)
         a.set_xticks(lv)
         a.set_xlabel("nivel")
-        a.grid(axis="y", color="#eaeef2")
-        a.spines[["top", "right"]].set_visible(False)
         a.legend(frameon=False, fontsize=9, loc="upper left")
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     save(fig, "curvas-nivel.png")
@@ -457,9 +473,9 @@ def livros_antigos():
 
 # ---------------------------------------------------------------- 7. arquitetura do codigo
 def arquitetura():
-    fig, ax = canvas(15, 8.4, "Arquitetura do plugin (dev.math.hrclasses)",
+    fig, ax = canvas(15, 8.4, "Arquitetura do plugin (dev.math.classforge)",
                      "Linhas aproximadas de cada classe Java. Setas: quem cria ou chama quem.")
-    box(ax, 5.6, 6.0, 3.8, 1.3, "HardcoreRouletteClasses", ["main, comandos, XP e niveis (400)"], LINE)
+    box(ax, 5.6, 6.0, 3.8, 1.3, "Classforge", ["main, comandos, XP e niveis (400)"], LINE)
     box(ax, 0.3, 3.4, 3.4, 1.6, "Engineer", ["torres, energia, rede,", "bancada, maquinas (2830)"], ENG)
     box(ax, 4.0, 3.4, 3.2, 1.6, "Explorer", ["chunks, companheiro,", "ancora, orbes (915)"], EXP)
     box(ax, 7.5, 3.4, 3.2, 1.6, "Farmer", ["Plantador de Cobre,", "colheita extra (430)"], FARM)
@@ -468,7 +484,7 @@ def arquitetura():
     box(ax, 4.0, 0.6, 3.2, 1.6, "Tunnel", ["Tuneladora e trem (600)"], ENG)
     box(ax, 7.5, 0.6, 3.2, 1.6, "EnergyFx", ["particulas nos cabos (80)"], ENG)
     box(ax, 11.0, 0.6, 3.6, 1.6, "RecipeGrid", ["tela 3x3 de receita (100)"], LINE)
-    box(ax, 10.6, 6.0, 4.0, 1.3, "HardcoreRoulette", ["party: divide XP (reflexao)"], GOLD)
+    box(ax, 10.6, 6.0, 4.0, 1.3, "HardcoreRoulette (opcional)", ["party, vida por mundo (reflexao)"], GOLD)
 
     for cx in (2.0, 5.6, 9.1, 12.8):
         arrow(ax, (7.5, 6.0), (cx, 5.02))
@@ -481,6 +497,34 @@ def arquitetura():
     save(fig, "arquitetura.png")
 
 
+# ---------------------------------------------------------------- 8. curva de XP
+def curva_xp():
+    import numpy as np
+    curves = [("Engenharia", ENG, 350, [0, 25, 75, 175, 350], [0, 10, 35, 125, 350]),
+              ("Exploracao", EXP, 2500, [0, 150, 500, 1200, 2500], [0, 70, 265, 900, 2500]),
+              ("Plantacao", FARM, 1000, [0, 60, 200, 500, 1000], [0, 30, 105, 360, 1000])]
+    fig, axs = plt.subplots(1, 3, figsize=(15, 4.4), dpi=150)
+    fig.suptitle("Curva de XP por nivel: xp(n) = MAX x (0.1 t + 0.9 t^4), t = (n - 1) / 4",
+                 fontsize=14, weight="bold", x=0.02, ha="left")
+    t = np.linspace(0, 1, 200)
+    for a, (name, color, mx, old, new) in zip(axs, curves):
+        y = mx * (0.1 * t + 0.9 * t ** 4)
+        a.fill_between(1 + 4 * t, y, color=color, alpha=0.10)
+        a.plot(1 + 4 * t, y, color=color, lw=2.4, label="nova (formula)")
+        a.plot(range(1, 6), new, "o", color=color, ms=7)
+        a.plot(range(1, 6), old, "--o", color=LINE, lw=1.6, ms=5, label="antiga")
+        for n, v in zip(range(1, 6), new):
+            a.annotate(str(v), (n, v), textcoords="offset points", xytext=(-8, 8), fontsize=9, color=INK, ha="right")
+        a.set_title(name, loc="left", weight="bold", color=color)
+        style_axes(a)
+        a.set_xticks(range(1, 6))
+        a.set_xlabel("nivel")
+        a.set_ylabel("XP total para chegar")
+        a.legend(frameon=False, fontsize=9, loc="upper left")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    save(fig, "curva-xp.png")
+
+
 if __name__ == "__main__":
     visao_geral()
     engenharia_niveis()
@@ -489,3 +533,4 @@ if __name__ == "__main__":
     graficos_nivel()
     livros_antigos()
     arquitetura()
+    curva_xp()

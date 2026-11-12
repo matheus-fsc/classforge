@@ -1,4 +1,4 @@
-package dev.math.hrclasses;
+package dev.math.classforge;
 
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -17,10 +17,10 @@ final class Settings {
     private Settings() {}
 
     // ---------- geral ----------
-    static String WORLD_MODE = "prefix";
+    static String WORLD_MODE = "all";
     static String WORLD_PREFIX = "hc_";
     static List<String> WORLD_LIST = List.of();
-    static boolean RESET_ON_NEW_WORLD = true;
+    static boolean RESET_ON_NEW_WORLD = false;
     static boolean PARTY_SHARE = true;
 
     // ---------- modulos ----------
@@ -35,11 +35,11 @@ final class Settings {
 
     private static FileConfiguration c;
     private static boolean dirty;
-    private static HardcoreRouletteClasses plugin;
+    private static Classforge plugin;
 
     static boolean isRunWorld(World w) {
         if (w == null) return false;
-        String base = HardcoreRouletteClasses.baseOf(w.getName());
+        String base = Classforge.baseOf(w.getName());
         return switch (WORLD_MODE) {
             case "all" -> true;
             case "list" -> WORLD_LIST.contains(base);
@@ -47,17 +47,17 @@ final class Settings {
         };
     }
 
-    static void load(HardcoreRouletteClasses p) {
+    static void load(Classforge p) {
         plugin = p;
         p.saveDefaultConfig();
         p.reloadConfig();
         c = p.getConfig();
         dirty = false;
 
-        WORLD_MODE = str("worlds.mode", "prefix").toLowerCase(Locale.ROOT);
+        WORLD_MODE = str("worlds.mode", "all").toLowerCase(Locale.ROOT);
         WORLD_PREFIX = str("worlds.prefix", "hc_");
         WORLD_LIST = strList("worlds.list", List.of());
-        RESET_ON_NEW_WORLD = bool("progress.reset-on-new-world", true);
+        RESET_ON_NEW_WORLD = bool("progress.reset-on-new-world", false);
         PARTY_SHARE = bool("progress.party-share", true);
 
         ENGINEERING = bool("modules.engineering", true);
@@ -66,7 +66,7 @@ final class Settings {
         BOOKS = bool("modules.ancient-books", true);
 
         // Engenharia
-        HardcoreRouletteClasses.LEVEL_XP = levels("engineering.level-xp", HardcoreRouletteClasses.LEVEL_XP);
+        Classforge.LEVEL_XP = levels("engineering.level-xp", Classforge.LEVEL_XP);
         Engineer.MAX_TURRETS = levels("engineering.turrets.max-per-level", Engineer.MAX_TURRETS);
         Engineer.RANGE = levels("engineering.turrets.range-per-level", Engineer.RANGE);
         Engineer.COOLDOWN = levels("engineering.turrets.cooldown-ticks-per-level", Engineer.COOLDOWN);
@@ -136,7 +136,7 @@ final class Settings {
         EnergyFx.VIEW = dbl("engineering.display.energy-particles-view", EnergyFx.VIEW);
 
         // Exploracao
-        HardcoreRouletteClasses.EXP_XP = levels("exploration.level-xp", HardcoreRouletteClasses.EXP_XP);
+        Classforge.EXP_XP = levels("exploration.level-xp", Classforge.EXP_XP);
         Explorer.ANCHOR_LEVEL = num("exploration.anchor.min-level", Explorer.ANCHOR_LEVEL);
         Explorer.RANGE = levels("exploration.anchor.range-per-level", Explorer.RANGE);
         Explorer.BLOCKS_PER_LEVEL = num("exploration.anchor.blocks-per-xp-level", Explorer.BLOCKS_PER_LEVEL);
@@ -145,7 +145,7 @@ final class Settings {
         Explorer.XP_BONUS = levels("exploration.orb-xp-bonus-percent", Explorer.XP_BONUS);
 
         // Plantacao
-        HardcoreRouletteClasses.FARM_XP = levels("farming.level-xp", HardcoreRouletteClasses.FARM_XP);
+        Classforge.FARM_XP = levels("farming.level-xp", Classforge.FARM_XP);
         Farmer.RADIUS = levels("farming.radius-per-level", Farmer.RADIUS);
         Farmer.MAX_GOLEMS = levels("farming.max-planters-per-level", Farmer.MAX_GOLEMS);
         Farmer.REST = levels("farming.seconds-per-seed-per-level", Farmer.REST);

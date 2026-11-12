@@ -1,17 +1,17 @@
-name: HardcoreRouletteClasses
-version: 0.12.0
-main: dev.math.hrclasses.HardcoreRouletteClasses
+name: Classforge
+version: 0.13.0
+main: dev.math.classforge.Classforge
 api-version: "26.3"
 author: matheus-fsc
-website: https://github.com/matheus-fsc/hardcore-roulette-addon-classes
-description: Habilidades por nivel (Engenharia, Exploracao, Plantacao) para servidores hardcore em grupo.
+website: https://github.com/matheus-fsc/classforge
+description: Habilidades por nivel (Engenharia, Exploracao, Plantacao) sem classes fixas. Integra com o HardcoreRoulette.
 softdepend: [HardcoreRoulette, AuraSkills]
 commands:
   classe:
     description: Abre o menu de habilidades
     usage: /classe [info|particulas|reload|admin <jogador> <nivel> [exploracao|plantacao]|dar <item>|give <engenheiro|explorador|plantador|livros> [jogador]]
-    aliases: [classes, class, engenharia, habilidades]
+    aliases: [classes, class, classforge, engenharia, habilidades]
 permissions:
-  hrclasses.admin:
-    description: Comandos de administracao (admin, dar, give)
+  classforge.admin:
+    description: Comandos de administracao (admin, dar, give, reload)
     default: op

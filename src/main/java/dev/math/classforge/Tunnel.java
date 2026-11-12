@@ -1,4 +1,4 @@
-package dev.math.hrclasses;
+package dev.math.classforge;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -73,13 +73,13 @@ final class Tunnel implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private final HardcoreRouletteClasses plugin;
+    private final Classforge plugin;
     private final Engineer eng;
     private final Map<String, Bore> bores = new HashMap<>();
     /** Cabo do teto da primeira fatia -> estacao (a ligacao eletrica entre os dois). */
     private final Map<String, String> tops = new HashMap<>();
 
-    Tunnel(HardcoreRouletteClasses plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
+    Tunnel(Classforge plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
 
     Bore bore(Engineer.Device d) { return bores.computeIfAbsent(d.key(), k -> new Bore()); }
 

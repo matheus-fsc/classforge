@@ -1,8 +1,8 @@
-# HardcoreRouletteClasses Wiki
+# Classforge Wiki
 
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 
-Mini wiki do HardcoreRouletteClasses, plugin Paper de habilidades por nivel. Cada pagina tem os diagramas e as tabelas de uma habilidade.
+Mini wiki do Classforge, plugin Paper de habilidades por nivel. Cada pagina tem os diagramas e as tabelas de uma habilidade.
 
 ![Visao geral](../img/visao-geral.png)
 
@@ -19,9 +19,13 @@ Mini wiki do HardcoreRouletteClasses, plugin Paper de habilidades por nivel. Cad
 
 ![Curvas por nivel](../img/curvas-nivel.png)
 
+## Curva de XP
+
+![Curva de XP](../img/curva-xp.png)
+
 ## Regras gerais
 
 - Todo jogador sobe as tres habilidades; nao existe escolha de classe.
-- O XP fica preso ao mundo `hc_*` da run. Morreu, comeca do nivel 1 na proxima vida.
-- Parte do XP de classe ganho e dividido com a party (integracao com o HardcoreRoulette).
+- Os mundos onde as habilidades valem sao definidos no config.yml (todos, por prefixo ou uma lista).
+- Com o HardcoreRoulette: parte do XP de classe vai para a party e os niveis zeram a cada vida (mundo novo).
 - `/classe` abre o menu. Nos paineis, clicar num item mostra a receita 3x3 dele.

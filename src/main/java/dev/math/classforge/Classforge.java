@@ -1,9 +1,10 @@
-package dev.math.hrclasses;
+package dev.math.classforge;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Material;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -33,15 +34,15 @@ import java.util.*;
  * Cada habilidade (por enquanto so Engenharia) sobe com XP proprio e zera quando a vida acaba:
  * o XP fica preso ao mundo hc em que foi ganho.
  */
-public final class HardcoreRouletteClasses extends JavaPlugin implements Listener {
+public final class Classforge extends JavaPlugin implements Listener {
 
     public static final class PData {
         String world; int xp, exp, farm;
     }
 
-    static int[] LEVEL_XP = {0, 25, 75, 175, 350};
-    static int[] EXP_XP = {0, 150, 500, 1200, 2500};
-    static int[] FARM_XP = {0, 60, 200, 500, 1000};
+    static int[] LEVEL_XP = {0, 10, 35, 125, 350};
+    static int[] EXP_XP = {0, 70, 265, 900, 2500};
+    static int[] FARM_XP = {0, 30, 105, 360, 1000};
 
     private final Map<UUID, PData> players = new HashMap<>();
     private final Set<UUID> fxOff = new HashSet<>();
@@ -51,8 +52,32 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     Farmer farmer;
     Relics relics;
 
+    /**
+     * Namespace das chaves de item (PDC e receitas). Fica o do nome antigo do plugin
+     * (HardcoreRouletteClasses) para os itens e maquinas que ja existem nos mundos continuarem valendo.
+     */
+    static final String KEY_NAMESPACE = "hardcorerouletteclasses";
+
+    static NamespacedKey key(String k) { return new NamespacedKey(KEY_NAMESPACE, k); }
+
+    /** Primeira vez como Classforge: copia os dados da pasta antiga (plugins/HardcoreRouletteClasses). */
+    private void migrateDataFolder() {
+        File old = new File(getDataFolder().getParentFile(), "HardcoreRouletteClasses");
+        File[] files = old.listFiles();
+        if (files == null || new File(getDataFolder(), "players.yml").exists()) return;
+        getDataFolder().mkdirs();
+        int n = 0;
+        for (File f : files) {
+            if (!f.isFile()) continue;
+            try { java.nio.file.Files.copy(f.toPath(), new File(getDataFolder(), f.getName()).toPath()); n++; }
+            catch (IOException ex) { getLogger().warning("migracao: " + f.getName() + ": " + ex.getMessage()); }
+        }
+        getLogger().info("Dados copiados de plugins/HardcoreRouletteClasses (" + n + " arquivos). A pasta antiga pode ser apagada.");
+    }
+
     @Override
     public void onEnable() {
+        migrateDataFolder();
         getDataFolder().mkdirs();
         Settings.load(this);
         playersFile = new File(getDataFolder(), "players.yml");
@@ -266,12 +291,12 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
-        if (a.length >= 1 && a[0].equalsIgnoreCase("reload") && s.hasPermission("hrclasses.admin")) {
+        if (a.length >= 1 && a[0].equalsIgnoreCase("reload") && s.hasPermission("classforge.admin")) {
             Settings.load(this);
             s.sendMessage("config.yml recarregado. Receitas e modulos ligados/desligados so mudam reiniciando o servidor.");
             return true;
         }
-        if (a.length >= 3 && a[0].equalsIgnoreCase("admin") && s.hasPermission("hrclasses.admin")) {
+        if (a.length >= 3 && a[0].equalsIgnoreCase("admin") && s.hasPermission("classforge.admin")) {
             Player t = Bukkit.getPlayerExact(a[1]);
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             int lvl = Math.max(1, Math.min(5, Integer.parseInt(a[2])));
@@ -283,7 +308,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
             s.sendMessage(t.getName() + " agora tem " + (exp ? "Exploracao" : farm ? "Plantacao" : "Engenharia") + " nivel " + lvl);
             return true;
         }
-        if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("hrclasses.admin")) {
+        if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("classforge.admin")) {
             Player t = a.length >= 3 ? Bukkit.getPlayerExact(a[2]) : s instanceof Player sp ? sp : null;
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             List<ItemStack> items = new ArrayList<>();
@@ -317,7 +342,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
             return true;
         }
         if (!(s instanceof Player p)) { s.sendMessage("Somente jogadores."); return true; }
-        if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("hrclasses.admin")) {
+        if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("classforge.admin")) {
             ItemStack it = a[1].equalsIgnoreCase("ancora") ? (explorer == null ? null : explorer.anchorItem())
                     : a[1].equalsIgnoreCase("plantador") ? (farmer == null ? null : farmer.planterItem())
                     : engineer == null ? null : engineer.item(a[1].toLowerCase(Locale.ROOT));
@@ -404,7 +429,7 @@ public final class HardcoreRouletteClasses extends JavaPlugin implements Listene
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
             List<String> o = new ArrayList<>(List.of("info", "particulas"));
-            if (s.hasPermission("hrclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); o.add("reload"); }
+            if (s.hasPermission("classforge.admin")) { o.add("admin"); o.add("dar"); o.add("give"); o.add("reload"); }
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }

@@ -3,7 +3,7 @@
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 
 
-Nivel proprio (60, 200, 500 e 1000 XP). Sobe colhendo plantacao madura (+1 a cada 4) e com as sementes que os seus plantadores plantam (+1 a cada 10).
+Nivel proprio (30, 105, 360 e 1000 XP). Sobe colhendo plantacao madura (+1 a cada 4) e com as sementes que os seus plantadores plantam (+1 a cada 10).
 
 | Nivel | Plantadores | Raio | 1 semente a cada | Colheita extra |
 |-------|-------------|------|------------------|----------------|

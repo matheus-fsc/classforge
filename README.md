@@ -1,10 +1,10 @@
-# HardcoreRouletteClasses
+# Classforge
 
-![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.12.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.13.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
 
-Plugin Paper de **habilidades por nivel** para servidores hardcore em grupo. Ninguem escolhe classe: todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo. Os niveis zeram quando a vida acaba.
+Plugin Paper de **habilidades por nivel** sem classes fixas. Todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo: torres de defesa, energia e maquinas, companheiros e teleporte, plantadores automaticos e livros encantados raros. Tudo e configuravel (mundos, modulos, balanceamento e receitas). Mensagens em portugues (pt-BR).
 
-Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), mas funciona sozinho (sem ele, so a divisao de XP com a party fica desligada). Mensagens em portugues (pt-BR).
+Funciona sozinho em qualquer servidor Paper. Com o [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) ganha funcoes especiais: veja [Integracao com o HardcoreRoulette](#integracao-com-o-hardcoreroulette).
 
 ## Recursos
 
@@ -16,8 +16,20 @@ Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), m
 ## Instalacao
 
 1. Servidor **Paper 26.3** com **Java 25**.
-2. Coloque `HardcoreRouletteClasses.jar` em `plugins/` e reinicie.
-3. Opcional: [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) para a divisao de XP com a party.
+2. Coloque `Classforge.jar` em `plugins/` e reinicie.
+3. Opcional: [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) para as funcoes especiais.
+
+Vindo da versao antiga (HardcoreRouletteClasses): troque o jar. Na primeira partida o Classforge copia os dados de `plugins/HardcoreRouletteClasses/`, e itens, maquinas e livros que ja existem no mundo continuam funcionando.
+
+## Integracao com o HardcoreRoulette
+
+O HardcoreRoulette e um plugin de hardcore em grupo em que cada vida e um mundo novo. Com ele instalado, o Classforge ganha:
+
+- **Vida por mundo**: os niveis ficam presos ao mundo da run e voltam ao nivel 1 quando a vida acaba (`progress.reset-on-new-world: true`, `worlds.mode: prefix`, `worlds.prefix: "hc_"`).
+- **XP dividido com a party**: parte do XP de habilidade vai para quem esta na party, com o mesmo alcance e fracao que o HardcoreRoulette usa (`progress.party-share`).
+- **Livros Antigos nas runs**: o loot de livros so aparece nos mundos de run.
+
+Sem o HardcoreRoulette, essas funcoes ficam desligadas e o resto funciona igual. A ligacao e feita por reflexao, sem dependencia de compilacao.
 
 ![Visao geral](docs/img/visao-geral.png)
 
@@ -31,7 +43,7 @@ Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), m
 | [Exploracao](docs/wiki/Exploracao.md) | Companheiro, Ancora de Perola, orbes, Livros Antigos |
 | [Arquitetura](docs/wiki/Arquitetura.md) | Classes Java, dados, geracao dos diagramas |
 
-## Estado atual (versao 0.12.0)
+## Estado atual (versao 0.13.0)
 
 | Area | Estado | Observacao |
 |------|--------|------------|
@@ -42,7 +54,8 @@ Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), m
 | Exploracao: companheiro, ancora, orbes | Pronto | |
 | Exploracao: Livros Antigos (12) | Novo, sem teste em jogo | Loot de baus de estrutura |
 | Plantacao: Plantador de Cobre | Pronto | Receita visivel no painel |
-| Divisao de XP com a party | Pronto | Depende do HardcoreRoulette carregado |
+| Integracao com o HardcoreRoulette | Pronto | Vida por mundo e XP dividido com a party |
+| Configuracao (config.yml) | Pronto | Mundos, modulos, balanceamento, receitas, `/classe reload` |
 
 Ideias em aberto: habilidade de Coleta, revisao de balanceamento depois de uma run completa.
 
@@ -53,10 +66,14 @@ Ideias em aberto: habilidade de Coleta, revisao de balanceamento depois de uma r
 | Nivel | Engenharia (XP) | Exploracao (XP) | Plantacao (XP) |
 |-------|-----------------|-----------------|----------------|
 | 1 | 0 | 0 | 0 |
-| 2 | 25 | 150 | 60 |
-| 3 | 75 | 500 | 200 |
-| 4 | 175 | 1200 | 500 |
+| 2 | 10 | 70 | 30 |
+| 3 | 35 | 265 | 105 |
+| 4 | 125 | 900 | 360 |
 | 5 | 350 | 2500 | 1000 |
+
+A curva comeca suave e fica ingreme nos niveis finais: `xp(n) = MAX x (0.1 x t + 0.9 x t^4)`, com `t = (n - 1) / 4`. Da para trocar os valores em `level-xp` no config.yml.
+
+![Curva de XP](docs/img/curva-xp.png)
 
 ![Niveis da Engenharia](docs/img/engenharia-niveis.png)
 
@@ -74,7 +91,7 @@ Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Eng
 
 ## Configuracao
 
-Tudo que era fixo no codigo agora fica em `plugins/HardcoreRouletteClasses/config.yml`, escrito comentado na primeira vez que o servidor liga ([modelo](src/main/resources/config.yml)). Os padroes sao os valores de antes, entao nada muda ate voce editar.
+Tudo que era fixo no codigo agora fica em `plugins/Classforge/config.yml`, escrito comentado na primeira vez que o servidor liga ([modelo](src/main/resources/config.yml)). Os padroes sao os valores de antes, entao nada muda ate voce editar.
 
 | Secao | O que controla |
 |-------|----------------|
@@ -89,7 +106,7 @@ Tudo que era fixo no codigo agora fica em `plugins/HardcoreRouletteClasses/confi
 
 `/classe reload` aplica os numeros sem reiniciar. Ligar ou desligar modulos e mudar receitas pede reinicio.
 
-Para usar fora do HardcoreRoulette: `worlds.mode: all` e `progress.reset-on-new-world: false`.
+O padrao de uma instalacao nova e o de servidor comum: `worlds.mode: all` e `progress.reset-on-new-world: false`. Para o HardcoreRoulette, veja a secao de integracao.
 
 ## Comandos
 
@@ -98,16 +115,16 @@ Para usar fora do HardcoreRoulette: `worlds.mode: all` e `progress.reset-on-new-
 | `/classe` (ou `/engenharia`, `/habilidades`) | Menu de habilidades |
 | `/classe info` | Nivel e status da Engenharia |
 | `/classe particulas` | Liga/desliga as particulas de energia |
-| `/classe admin <jogador> <nivel>` | Define o nivel (permissao `hrclasses.admin`) |
-| `/classe dar <item>` | Da um item do plugin (permissao `hrclasses.admin`) |
-| `/classe reload` | Recarrega o config.yml (permissao `hrclasses.admin`) |
-| `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `hrclasses.admin`) |
+| `/classe admin <jogador> <nivel>` | Define o nivel (permissao `classforge.admin`) |
+| `/classe dar <item>` | Da um item do plugin (permissao `classforge.admin`) |
+| `/classe reload` | Recarrega o config.yml (permissao `classforge.admin`) |
+| `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `classforge.admin`) |
 
 ## Permissoes
 
 | Permissao | Padrao | Descricao |
 |-----------|--------|-----------|
-| `hrclasses.admin` | op | `/classe admin`, `/classe dar` e `/classe give` |
+| `classforge.admin` | op | `/classe admin`, `/classe dar` e `/classe give` |
 
 ## Build
 
@@ -115,7 +132,7 @@ Para usar fora do HardcoreRoulette: `worlds.mode: all` e `progress.reset-on-new-
 mvn package
 ```
 
-O jar sai em `target/HardcoreRouletteClasses.jar`. Copie para `plugins/`.
+O jar sai em `target/Classforge.jar`. Copie para `plugins/`.
 
 Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib e do Minecraft instalado para os icones; detalhes em [Arquitetura](docs/wiki/Arquitetura.md)).
 
@@ -123,7 +140,7 @@ Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotli
 
 ![Arquitetura](docs/img/arquitetura.png)
 
-Dados em `plugins/HardcoreRouletteClasses/`: `config.yml`, `players.yml`, `devices.yml`, `explorer.yml` e `farm.yml`. Mais em [Arquitetura](docs/wiki/Arquitetura.md).
+Dados em `plugins/Classforge/`: `config.yml`, `players.yml`, `devices.yml`, `explorer.yml` e `farm.yml`. Mais em [Arquitetura](docs/wiki/Arquitetura.md).
 
 ## Licenca
 

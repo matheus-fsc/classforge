@@ -1,4 +1,4 @@
-package dev.math.hrclasses;
+package dev.math.classforge;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -139,7 +139,7 @@ final class Engineer implements Listener {
         Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount) { this(type, minLevel, cost, amount, Map.of()); }
     }
 
-    private final HardcoreRouletteClasses plugin;
+    private final Classforge plugin;
     private final NamespacedKey devKey, arrowKey, recipeKey, barrelKey;
     private final Map<String, Device> devices = new HashMap<>();
     private final Map<UUID, double[]> lastPos = new HashMap<>(); // x, y, z, tick
@@ -153,16 +153,16 @@ final class Engineer implements Listener {
     private final NamespacedKey insulKey;
     private final List<Device> orphans = new ArrayList<>();
 
-    Engineer(HardcoreRouletteClasses plugin) {
+    Engineer(Classforge plugin) {
         this.plugin = plugin;
-        this.devKey = new NamespacedKey(plugin, "device");
-        this.arrowKey = new NamespacedKey(plugin, "turret-arrow");
-        this.recipeKey = new NamespacedKey(plugin, "bancada");
-        this.barrelKey = new NamespacedKey(plugin, "barrel");
+        this.devKey = Classforge.key("device");
+        this.arrowKey = Classforge.key("turret-arrow");
+        this.recipeKey = Classforge.key("bancada");
+        this.barrelKey = Classforge.key("barrel");
         this.file = new File(plugin.getDataFolder(), "devices.yml");
         this.factory = new Factory(plugin, this);
         this.tunnel = new Tunnel(plugin, this);
-        this.insulKey = new NamespacedKey(plugin, "sola-isolante");
+        this.insulKey = Classforge.key("sola-isolante");
         // Fundicao Termica: sem energia, unica receita so com itens vanilla (comeco da cadeia industrial)
         recipes.add(new Recipe("fundicao", 1, costs(Material.BLAST_FURNACE, 1, Material.IRON_BLOCK, 2, Material.COPPER_BLOCK, 2, Material.MAGMA_BLOCK, 2)));
         recipes.add(new Recipe("torre", 1, costs(Material.DISPENSER, 1, Material.CROSSBOW, 1, Material.REDSTONE_BLOCK, 1), 1, parts("ferro_industrial", 2, "motor", 1, "circuito", 1)));
@@ -413,14 +413,14 @@ final class Engineer implements Listener {
     Device at(Block b) { return devices.get(b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ()); }
 
     private long countType(UUID owner, String world, String type) {
-        String base = HardcoreRouletteClasses.baseOf(world);
-        return devices.values().stream().filter(d -> d.owner.equals(owner) && d.type.equals(type) && HardcoreRouletteClasses.baseOf(d.world).equals(base)).count();
+        String base = Classforge.baseOf(world);
+        return devices.values().stream().filter(d -> d.owner.equals(owner) && d.type.equals(type) && Classforge.baseOf(d.world).equals(base)).count();
     }
 
     private long count(UUID owner, String world, boolean turrets) {
-        String base = HardcoreRouletteClasses.baseOf(world);
+        String base = Classforge.baseOf(world);
         return devices.values().stream().filter(d -> d.owner.equals(owner)
-                && HardcoreRouletteClasses.baseOf(d.world).equals(base)
+                && Classforge.baseOf(d.world).equals(base)
                 && (turrets ? isTurret(d.type) : d.isSource())).count();
     }
 
@@ -744,7 +744,7 @@ final class Engineer implements Listener {
         ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
         for (int i = 0; i < 54; i++) inv.setItem(i, filler);
 
-        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + HardcoreRouletteClasses.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + Classforge.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
         inv.setItem(4, icon(Material.DISPENSER, "Engenharia - nivel " + lvl, NamedTextColor.GOLD,
                 next, "", "Todo mundo pode montar, o nivel", "e que libera mais coisas.", "",
                 "Como ganhar XP: veja o frasco.", "", "O nivel zera quando a vida acaba."));
@@ -773,7 +773,7 @@ final class Engineer implements Listener {
             int L = i + 1;
             boolean got = lvl >= L;
             List<String> lore = new ArrayList<>();
-            lore.add(L == 1 ? "Inicial" : "Precisa de " + HardcoreRouletteClasses.LEVEL_XP[i] + " XP");
+            lore.add(L == 1 ? "Inicial" : "Precisa de " + Classforge.LEVEL_XP[i] + " XP");
             lore.add("");
             lore.add("+ Ate " + MAX_TURRETS[i] + " torres");
             lore.add("+ Alcance " + RANGE[i] + " blocos");
@@ -810,9 +810,9 @@ final class Engineer implements Listener {
     }
 
     private double storedEnergy(UUID owner, String world) {
-        String base = HardcoreRouletteClasses.baseOf(world);
+        String base = Classforge.baseOf(world);
         double s = 0;
-        for (Device d : devices.values()) if (d.owner.equals(owner) && d.isSource() && HardcoreRouletteClasses.baseOf(d.world).equals(base)) s += d.energy;
+        for (Device d : devices.values()) if (d.owner.equals(owner) && d.isSource() && Classforge.baseOf(d.world).equals(base)) s += d.energy;
         return s;
     }
 
@@ -1468,7 +1468,7 @@ final class Engineer implements Listener {
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
     public void onFurnaceTake(org.bukkit.event.inventory.FurnaceExtractEvent e) {
-        if (ingot(e.getItemType()) && HardcoreRouletteClasses.isRunWorld(e.getPlayer().getWorld()))
+        if (ingot(e.getItemType()) && Classforge.isRunWorld(e.getPlayer().getWorld()))
             xpFrac(e.getPlayer().getUniqueId(), XP_INGOT * e.getItemAmount());
     }
 
@@ -1476,7 +1476,7 @@ final class Engineer implements Listener {
     public void onMechCraft(org.bukkit.event.inventory.CraftItemEvent e) {
         ItemStack r = e.getRecipe().getResult();
         if (!(e.getWhoClicked() instanceof Player p) || typeOf(r) != null || !MECH.contains(r.getType())) return;
-        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
+        if (!Classforge.isRunWorld(p.getWorld())) return;
         plugin.addXp(p.getUniqueId(), XP_MECH);
     }
 
@@ -2345,7 +2345,7 @@ final class Engineer implements Listener {
         a.getPersistentDataContainer().set(arrowKey, PersistentDataType.STRING, t.owner.toString());
     }
 
-    private final NamespacedKey bulletKey() { return new NamespacedKey(plugin, "bullet-dmg"); }
+    private final NamespacedKey bulletKey() { return Classforge.key("bullet-dmg"); }
 
     /** Bala: projetil reto e rapido (sem gravidade); o dano e aplicado no impacto. */
     private void bullet(World w, Location c, Vector aim, Device t, ItemStack look, double dmg, double jitter) {

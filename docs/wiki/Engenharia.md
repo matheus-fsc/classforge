@@ -9,9 +9,9 @@
 | Nivel | XP  | Torres | Alcance | Tiros/s | Extra |
 |-------|-----|--------|---------|---------|-------|
 | 1     | 0   | 2      | 12      | 1.0     |       |
-| 2     | 25  | 3      | 14      | 1.2     | Geotermico, Bateria e Forja |
-| 3     | 75  | 4      | 16      | 1.4     | Flecha de fogo (30%) |
-| 4     | 175 | 5      | 18      | 1.7     |       |
+| 2     | 10  | 3      | 14      | 1.2     | Geotermico, Bateria e Forja |
+| 3     | 35  | 4      | 16      | 1.4     | Flecha de fogo (30%) |
+| 4     | 125 | 5      | 18      | 1.7     |       |
 | 5     | 350 | 6      | 20      | 2.0     | Tiro duplo |
 
 XP (o painel mostra tudo no frasco de XP):
