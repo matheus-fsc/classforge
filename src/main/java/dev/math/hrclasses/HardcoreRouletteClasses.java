@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -33,7 +33,7 @@ import java.util.*;
  * Cada habilidade (por enquanto so Engenharia) sobe com XP proprio e zera quando a vida acaba:
  * o XP fica preso ao mundo hc em que foi ganho.
  */
-public final class BabylonClasses extends JavaPlugin implements Listener {
+public final class HardcoreRouletteClasses extends JavaPlugin implements Listener {
 
     public static final class PData {
         String world; int xp, exp, farm;
@@ -265,7 +265,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
-        if (a.length >= 3 && a[0].equalsIgnoreCase("admin") && s.hasPermission("bclasses.admin")) {
+        if (a.length >= 3 && a[0].equalsIgnoreCase("admin") && s.hasPermission("hrclasses.admin")) {
             Player t = Bukkit.getPlayerExact(a[1]);
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             int lvl = Math.max(1, Math.min(5, Integer.parseInt(a[2])));
@@ -277,7 +277,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             s.sendMessage(t.getName() + " agora tem " + (exp ? "Exploracao" : farm ? "Plantacao" : "Engenharia") + " nivel " + lvl);
             return true;
         }
-        if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("bclasses.admin")) {
+        if (a.length >= 2 && a[0].equalsIgnoreCase("give") && s.hasPermission("hrclasses.admin")) {
             Player t = a.length >= 3 ? Bukkit.getPlayerExact(a[2]) : s instanceof Player sp ? sp : null;
             if (t == null) { s.sendMessage("Jogador offline."); return true; }
             List<ItemStack> items = new ArrayList<>();
@@ -308,7 +308,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
             return true;
         }
         if (!(s instanceof Player p)) { s.sendMessage("Somente jogadores."); return true; }
-        if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("bclasses.admin")) {
+        if (a.length >= 2 && a[0].equalsIgnoreCase("dar") && p.hasPermission("hrclasses.admin")) {
             ItemStack it = a[1].equalsIgnoreCase("ancora") ? explorer.anchorItem() : a[1].equalsIgnoreCase("plantador") ? farmer.planterItem() : engineer.item(a[1].toLowerCase(Locale.ROOT));
             if (it == null) { p.sendMessage("Itens: " + String.join(", ", Engineer.TYPES)); return true; }
             p.getInventory().addItem(it);
@@ -390,7 +390,7 @@ public final class BabylonClasses extends JavaPlugin implements Listener {
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
             List<String> o = new ArrayList<>(List.of("info", "particulas"));
-            if (s.hasPermission("bclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); }
+            if (s.hasPermission("hrclasses.admin")) { o.add("admin"); o.add("dar"); o.add("give"); }
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }

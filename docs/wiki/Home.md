@@ -1,8 +1,8 @@
-# Wiki: HardcoreRoulette Classes
+# HardcoreRouletteClasses Wiki
 
 [Inicio](Home.md) | [Engenharia](Engenharia.md) | [Plantacao](Plantacao.md) | [Exploracao](Exploracao.md) | [Arquitetura](Arquitetura.md)
 
-Mini wiki do plugin de habilidades do BABYLON FLAMES. Cada pagina tem os diagramas e as tabelas de uma habilidade.
+Mini wiki do HardcoreRouletteClasses, plugin Paper de habilidades por nivel. Cada pagina tem os diagramas e as tabelas de uma habilidade.
 
 ![Visao geral](../img/visao-geral.png)
 

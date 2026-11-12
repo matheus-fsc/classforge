@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -72,14 +72,14 @@ final class Farmer implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final NamespacedKey itemKey, golemKey, recipeKey;
     private final Map<UUID, Planter> planters = new HashMap<>();
     private final Map<UUID, Double> frac = new HashMap<>();
     private final Random rnd = new Random();
     private final File file;
 
-    Farmer(BabylonClasses plugin) {
+    Farmer(HardcoreRouletteClasses plugin) {
         this.plugin = plugin;
         this.itemKey = new NamespacedKey(plugin, "farm-item");
         this.golemKey = new NamespacedKey(plugin, "planter-owner");
@@ -205,7 +205,7 @@ final class Farmer implements Listener {
         if (e.getHand() != EquipmentSlot.HAND) return;
         Player p = e.getPlayer();
         if (p.isSneaking()) {
-            if (!pl.owner.equals(p.getUniqueId()) && !p.hasPermission("bclasses.admin")) {
+            if (!pl.owner.equals(p.getUniqueId()) && !p.hasPermission("hrclasses.admin")) {
                 p.sendActionBar(Component.text("Esse plantador nao e seu.", NamedTextColor.RED));
                 return;
             }
@@ -329,7 +329,7 @@ final class Farmer implements Listener {
         Material prod = produce(b.getType());
         if (prod == null || !(b.getBlockData() instanceof Ageable a) || a.getAge() < a.getMaximumAge()) return;
         Player p = e.getPlayer();
-        if (!BabylonClasses.isRunWorld(p.getWorld())) return;
+        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
         int lvl = level(p.getUniqueId());
         xp(p.getUniqueId(), XP_HARVEST);
         if (rnd.nextInt(100) < BONUS[lvl - 1]) {
@@ -360,7 +360,7 @@ final class Farmer implements Listener {
         for (int i = 0; i < 45; i++) inv.setItem(i, filler);
         UUID id = p.getUniqueId();
         int lvl = level(id), xp = plugin.data(id).farm;
-        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.FARM_XP[lvl] + " para o nivel " + (lvl + 1);
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + HardcoreRouletteClasses.FARM_XP[lvl] + " para o nivel " + (lvl + 1);
         inv.setItem(4, icon(Material.GOLDEN_HOE, "Plantacao - nivel " + lvl, NamedTextColor.GREEN, List.of(
                 next, "", "Plantadores: " + countOf(id) + "/" + MAX_GOLEMS[lvl - 1] + " (raio " + RADIUS[lvl - 1] + ")",
                 "Colheita extra: " + BONUS[lvl - 1] + "%", "", "O nivel zera quando a vida acaba.")));
@@ -380,7 +380,7 @@ final class Farmer implements Listener {
             int L = i + 1;
             boolean got = lvl >= L;
             List<String> lore = new ArrayList<>();
-            lore.add(L == 1 ? "Inicial" : "Precisa de " + BabylonClasses.FARM_XP[i] + " XP");
+            lore.add(L == 1 ? "Inicial" : "Precisa de " + HardcoreRouletteClasses.FARM_XP[i] + " XP");
             lore.add("");
             lore.add("+ " + MAX_GOLEMS[i] + " plantador(es)");
             lore.add("+ Raio " + RADIUS[i] + " blocos em volta do bau");

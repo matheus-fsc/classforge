@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;

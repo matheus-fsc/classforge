@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -65,12 +65,12 @@ final class Relics implements Listener {
     };
     static final int[] VEIN = {0, 6, 12, 20};
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final NamespacedKey bookKey;
     private final Map<String, NamespacedKey> keys = new HashMap<>();
     private final Set<UUID> veining = new HashSet<>();
 
-    Relics(BabylonClasses plugin) {
+    Relics(HardcoreRouletteClasses plugin) {
         this.plugin = plugin;
         bookKey = new NamespacedKey(plugin, "relic_book");
         for (Relic r : RELICS) keys.put(r.id(), new NamespacedKey(plugin, "relic_" + r.id()));
@@ -181,7 +181,7 @@ final class Relics implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onLoot(LootGenerateEvent e) {
         if (!(e.getEntity() instanceof Player p) || e.getInventoryHolder() == null) return;
-        if (!BabylonClasses.isRunWorld(p.getWorld())) return;
+        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
         int lvl = plugin.explorerLevel(p.getUniqueId());
         if (rnd.nextDouble() >= findChance(lvl)) return;

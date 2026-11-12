@@ -8,7 +8,7 @@
 
 | Classe | Papel |
 |--------|-------|
-| `BabylonClasses` | Classe principal: comandos, XP e niveis das tres habilidades, divisao de XP com a party |
+| `HardcoreRouletteClasses` | Classe principal: comandos, XP e niveis das tres habilidades, divisao de XP com a party |
 | `Engineer` | Bancada, torres (Sentinela e Laser), geradores, bateria, cabos, postes, etiquetas, maquinas simples |
 | `Factory` | Linha industrial (Prensa, Torno, Bobinadeira, Cadinho, Gravadora, Laminadora) e a tela das maquinas |
 | `Tunnel` | Estacao, Trem Tunelador, brocas e Modulo de Coleta |

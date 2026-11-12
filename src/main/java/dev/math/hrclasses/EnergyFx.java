@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -24,10 +24,10 @@ final class EnergyFx {
         }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final List<Pulse> pulses = new ArrayList<>();
 
-    EnergyFx(BabylonClasses plugin) {
+    EnergyFx(HardcoreRouletteClasses plugin) {
         this.plugin = plugin;
         Bukkit.getScheduler().runTaskTimer(plugin, this::render, 2L, 2L);
     }

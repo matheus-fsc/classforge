@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -139,7 +139,7 @@ final class Engineer implements Listener {
         Recipe(String type, int minLevel, Map<Material, Integer> cost, int amount) { this(type, minLevel, cost, amount, Map.of()); }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final NamespacedKey devKey, arrowKey, recipeKey, barrelKey;
     private final Map<String, Device> devices = new HashMap<>();
     private final Map<UUID, double[]> lastPos = new HashMap<>(); // x, y, z, tick
@@ -153,7 +153,7 @@ final class Engineer implements Listener {
     private final NamespacedKey insulKey;
     private final List<Device> orphans = new ArrayList<>();
 
-    Engineer(BabylonClasses plugin) {
+    Engineer(HardcoreRouletteClasses plugin) {
         this.plugin = plugin;
         this.devKey = new NamespacedKey(plugin, "device");
         this.arrowKey = new NamespacedKey(plugin, "turret-arrow");
@@ -412,14 +412,14 @@ final class Engineer implements Listener {
     Device at(Block b) { return devices.get(b.getWorld().getName() + ":" + b.getX() + ":" + b.getY() + ":" + b.getZ()); }
 
     private long countType(UUID owner, String world, String type) {
-        String base = BabylonClasses.baseOf(world);
-        return devices.values().stream().filter(d -> d.owner.equals(owner) && d.type.equals(type) && BabylonClasses.baseOf(d.world).equals(base)).count();
+        String base = HardcoreRouletteClasses.baseOf(world);
+        return devices.values().stream().filter(d -> d.owner.equals(owner) && d.type.equals(type) && HardcoreRouletteClasses.baseOf(d.world).equals(base)).count();
     }
 
     private long count(UUID owner, String world, boolean turrets) {
-        String base = BabylonClasses.baseOf(world);
+        String base = HardcoreRouletteClasses.baseOf(world);
         return devices.values().stream().filter(d -> d.owner.equals(owner)
-                && BabylonClasses.baseOf(d.world).equals(base)
+                && HardcoreRouletteClasses.baseOf(d.world).equals(base)
                 && (turrets ? isTurret(d.type) : d.isSource())).count();
     }
 
@@ -743,7 +743,7 @@ final class Engineer implements Listener {
         ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ", NamedTextColor.GRAY);
         for (int i = 0; i < 54; i++) inv.setItem(i, filler);
 
-        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + HardcoreRouletteClasses.LEVEL_XP[lvl] + " para o nivel " + (lvl + 1);
         inv.setItem(4, icon(Material.DISPENSER, "Engenharia - nivel " + lvl, NamedTextColor.GOLD,
                 next, "", "Todo mundo pode montar, o nivel", "e que libera mais coisas.", "",
                 "Como ganhar XP: veja o frasco.", "", "O nivel zera quando a vida acaba."));
@@ -772,7 +772,7 @@ final class Engineer implements Listener {
             int L = i + 1;
             boolean got = lvl >= L;
             List<String> lore = new ArrayList<>();
-            lore.add(L == 1 ? "Inicial" : "Precisa de " + BabylonClasses.LEVEL_XP[i] + " XP");
+            lore.add(L == 1 ? "Inicial" : "Precisa de " + HardcoreRouletteClasses.LEVEL_XP[i] + " XP");
             lore.add("");
             lore.add("+ Ate " + MAX_TURRETS[i] + " torres");
             lore.add("+ Alcance " + RANGE[i] + " blocos");
@@ -809,9 +809,9 @@ final class Engineer implements Listener {
     }
 
     private double storedEnergy(UUID owner, String world) {
-        String base = BabylonClasses.baseOf(world);
+        String base = HardcoreRouletteClasses.baseOf(world);
         double s = 0;
-        for (Device d : devices.values()) if (d.owner.equals(owner) && d.isSource() && BabylonClasses.baseOf(d.world).equals(base)) s += d.energy;
+        for (Device d : devices.values()) if (d.owner.equals(owner) && d.isSource() && HardcoreRouletteClasses.baseOf(d.world).equals(base)) s += d.energy;
         return s;
     }
 
@@ -1467,7 +1467,7 @@ final class Engineer implements Listener {
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
     public void onFurnaceTake(org.bukkit.event.inventory.FurnaceExtractEvent e) {
-        if (ingot(e.getItemType()) && BabylonClasses.isRunWorld(e.getPlayer().getWorld()))
+        if (ingot(e.getItemType()) && HardcoreRouletteClasses.isRunWorld(e.getPlayer().getWorld()))
             xpFrac(e.getPlayer().getUniqueId(), XP_INGOT * e.getItemAmount());
     }
 
@@ -1475,7 +1475,7 @@ final class Engineer implements Listener {
     public void onMechCraft(org.bukkit.event.inventory.CraftItemEvent e) {
         ItemStack r = e.getRecipe().getResult();
         if (!(e.getWhoClicked() instanceof Player p) || typeOf(r) != null || !MECH.contains(r.getType())) return;
-        if (!BabylonClasses.isRunWorld(p.getWorld())) return;
+        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
         plugin.addXp(p.getUniqueId(), XP_MECH);
     }
 

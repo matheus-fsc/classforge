@@ -1,8 +1,23 @@
-# HardcoreRoulette Addon: Classes
+# HardcoreRouletteClasses
 
-Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) (plugin HardcoreRouletteClasses) feito para o servidor hardcore BABYLON FLAMES. Plugin Paper de **habilidades por nivel** para grupos: ninguem escolhe classe, todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo. Os niveis zeram quando a vida acaba.
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.11.1-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
 
-Feito para **Paper 26.3** (Java 25). Mensagens em portugues (pt-BR).
+Plugin Paper de **habilidades por nivel** para servidores hardcore em grupo. Ninguem escolhe classe: todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo. Os niveis zeram quando a vida acaba.
+
+Addon do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette), mas funciona sozinho (sem ele, so a divisao de XP com a party fica desligada). Mensagens em portugues (pt-BR).
+
+## Recursos
+
+- **Engenharia**: torres de defesa (Sentinela e Laser), energia, cabos e postes, maquinas, linha industrial e Tuneladora.
+- **Exploracao**: companheiro, Ancora de Perola, bonus de XP e Livros Antigos em baus de estrutura.
+- **Plantacao**: Plantador de Cobre (golem que planta a partir de um bau) e colheita extra.
+- Menus proprios com receita 3x3 de cada item, etiquetas flutuantes e particulas de energia.
+
+## Instalacao
+
+1. Servidor **Paper 26.3** com **Java 25**.
+2. Coloque `HardcoreRouletteClasses.jar` em `plugins/` e reinicie.
+3. Opcional: [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette) para a divisao de XP com a party.
 
 ![Visao geral](docs/img/visao-geral.png)
 
@@ -16,7 +31,7 @@ Feito para **Paper 26.3** (Java 25). Mensagens em portugues (pt-BR).
 | [Exploracao](docs/wiki/Exploracao.md) | Companheiro, Ancora de Perola, orbes, Livros Antigos |
 | [Arquitetura](docs/wiki/Arquitetura.md) | Classes Java, dados, geracao dos diagramas |
 
-## Estado atual (versao 0.11.0)
+## Estado atual (versao 0.11.1)
 
 | Area | Estado | Observacao |
 |------|--------|------------|
@@ -64,9 +79,15 @@ Detalhes de cada maquina, receita e consumo na pagina [Engenharia](docs/wiki/Eng
 | `/classe` (ou `/engenharia`, `/habilidades`) | Menu de habilidades |
 | `/classe info` | Nivel e status da Engenharia |
 | `/classe particulas` | Liga/desliga as particulas de energia |
-| `/classe admin <jogador> <nivel>` | Define o nivel (permissao `bclasses.admin`) |
-| `/classe dar <item>` | Da um item do plugin (permissao `bclasses.admin`) |
-| `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `bclasses.admin`) |
+| `/classe admin <jogador> <nivel>` | Define o nivel (permissao `hrclasses.admin`) |
+| `/classe dar <item>` | Da um item do plugin (permissao `hrclasses.admin`) |
+| `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `hrclasses.admin`) |
+
+## Permissoes
+
+| Permissao | Padrao | Descricao |
+|-----------|--------|-----------|
+| `hrclasses.admin` | op | `/classe admin`, `/classe dar` e `/classe give` |
 
 ## Build
 

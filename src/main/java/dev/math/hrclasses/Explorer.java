@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -94,7 +94,7 @@ final class Explorer implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final NamespacedKey petKey, itemKey, recipeKey;
     private final Map<UUID, PetData> data = new HashMap<>();
     private final Map<String, Anchor> anchors = new HashMap<>();
@@ -104,7 +104,7 @@ final class Explorer implements Listener {
     private final Map<UUID, Object[]> switchConfirm = new HashMap<>(); // {altar key, expira em ms}
     private final File file;
 
-    Explorer(BabylonClasses plugin) {
+    Explorer(HardcoreRouletteClasses plugin) {
         this.plugin = plugin;
         this.petKey = new NamespacedKey(plugin, "pet-owner");
         this.itemKey = new NamespacedKey(plugin, "explorer-item");
@@ -160,7 +160,7 @@ final class Explorer implements Listener {
         if ((f.getBlockX() >> 4) == (t.getBlockX() >> 4) && (f.getBlockZ() >> 4) == (t.getBlockZ() >> 4) && f.getWorld() == t.getWorld()) return;
         Player p = e.getPlayer();
         if (p.getGameMode() != GameMode.SURVIVAL && p.getGameMode() != GameMode.ADVENTURE) return;
-        if (!BabylonClasses.isRunWorld(t.getWorld())) return;
+        if (!HardcoreRouletteClasses.isRunWorld(t.getWorld())) return;
         String k = t.getWorld().getName() + ":" + (t.getBlockX() >> 4) + ":" + (t.getBlockZ() >> 4);
         if (pd(p.getUniqueId()).chunks.add(k)) plugin.addExp(p.getUniqueId(), 1);
     }
@@ -174,7 +174,7 @@ final class Explorer implements Listener {
     public void onXpOrb(org.bukkit.event.player.PlayerExpChangeEvent e) {
         if (e.getAmount() <= 0) return;
         Player p = e.getPlayer();
-        if (!BabylonClasses.isRunWorld(p.getWorld())) return;
+        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) return;
         UUID id = p.getUniqueId();
         double v = xpFrac.getOrDefault(id, 0.0) + e.getAmount() * XP_BONUS[level(id) - 1] / 100.0;
         int whole = (int) v;
@@ -262,7 +262,7 @@ final class Explorer implements Listener {
             p.sendMessage(Component.text("Altar de " + kind.label + ": acenda as velas (" + unlit + " apagadas). Use isqueiro ou carga de fogo.", NamedTextColor.YELLOW));
             return;
         }
-        if (!BabylonClasses.isRunWorld(p.getWorld())) { p.sendMessage(Component.text("O ritual so funciona no mundo da run.", NamedTextColor.RED)); return; }
+        if (!HardcoreRouletteClasses.isRunWorld(p.getWorld())) { p.sendMessage(Component.text("O ritual so funciona no mundo da run.", NamedTextColor.RED)); return; }
         PetData d = pd(p.getUniqueId());
         Entity cur = d.pet == null ? null : Bukkit.getEntity(d.pet);
         if (d.alive && d.kind == kind) { p.sendMessage(Component.text("Seu " + kind.label.toLowerCase(Locale.ROOT) + " ja esta vivo.", NamedTextColor.GRAY)); return; }
@@ -764,7 +764,7 @@ final class Explorer implements Listener {
         UUID id = p.getUniqueId();
         int lvl = level(id), xp = plugin.data(id).exp;
         PetData d = pd(id);
-        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + BabylonClasses.EXP_XP[lvl] + " para o nivel " + (lvl + 1);
+        String next = lvl >= 5 ? "Nivel maximo" : "XP " + xp + "/" + HardcoreRouletteClasses.EXP_XP[lvl] + " para o nivel " + (lvl + 1);
         inv.setItem(4, icon(Material.COMPASS, "Exploracao - nivel " + lvl, NamedTextColor.AQUA, List.of(
                 next, "Chunks visitados nesta vida: " + d.chunks.size(), "", "+1 XP por chunk novo (mundo da run).",
                 "Carne da +" + String.format(Locale.ROOT, "%.1f", 0.6 * lvl) + " de saturacao extra.",
@@ -827,7 +827,7 @@ final class Explorer implements Listener {
             int L = i + 1;
             boolean got = lvl >= L;
             List<String> lore = new ArrayList<>();
-            lore.add(L == 1 ? "Inicial" : "Precisa de " + BabylonClasses.EXP_XP[i] + " XP");
+            lore.add(L == 1 ? "Inicial" : "Precisa de " + HardcoreRouletteClasses.EXP_XP[i] + " XP");
             lore.add("");
             lore.add("+ Pet mais forte, carne +" + String.format(Locale.ROOT, "%.1f", 0.6 * L));
             lore.add("+ Mochila da raposa: " + packSize(L) + " espacos");

@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -102,10 +102,10 @@ final class Factory implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final Engineer eng;
 
-    Factory(BabylonClasses plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
+    Factory(HardcoreRouletteClasses plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
 
     // ---------- inventario / tela ----------
 

@@ -1,4 +1,4 @@
-package dev.math.bclasses;
+package dev.math.hrclasses;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -73,13 +73,13 @@ final class Tunnel implements Listener {
         @Override public Inventory getInventory() { return inv; }
     }
 
-    private final BabylonClasses plugin;
+    private final HardcoreRouletteClasses plugin;
     private final Engineer eng;
     private final Map<String, Bore> bores = new HashMap<>();
     /** Cabo do teto da primeira fatia -> estacao (a ligacao eletrica entre os dois). */
     private final Map<String, String> tops = new HashMap<>();
 
-    Tunnel(BabylonClasses plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
+    Tunnel(HardcoreRouletteClasses plugin, Engineer eng) { this.plugin = plugin; this.eng = eng; }
 
     Bore bore(Engineer.Device d) { return bores.computeIfAbsent(d.key(), k -> new Bore()); }
 

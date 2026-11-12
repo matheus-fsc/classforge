@@ -4,7 +4,7 @@ Gera os diagramas do README e da wiki em docs/img/.
     python docs/diagrams.py
 
 Requer matplotlib. Os numeros aqui espelham o codigo (Engineer, Farmer, Explorer, Relics,
-BabylonClasses); ao mudar um balanceamento, atualize a tabela correspondente e rode de novo.
+HardcoreRouletteClasses); ao mudar um balanceamento, atualize a tabela correspondente e rode de novo.
 """
 from pathlib import Path
 
@@ -80,7 +80,7 @@ def save(fig, name):
 
 # ---------------------------------------------------------------- 1. visao geral
 def visao_geral():
-    fig, ax = canvas(14, 7.0, "Habilidades do BABYLON FLAMES",
+    fig, ax = canvas(14, 7.0, "HardcoreRouletteClasses: habilidades",
                      "Ninguem escolhe classe: todo jogador sobe as tres. O nivel libera o conteudo.")
     box(ax, 5.2, 4.2, 3.6, 1.35, "Jogador (vida hardcore)",
         ["XP preso ao mundo hc_* da run", "Morreu: tudo volta ao nivel 1"], LINE, align="center")
@@ -320,9 +320,9 @@ def livros_antigos():
 
 # ---------------------------------------------------------------- 7. arquitetura do codigo
 def arquitetura():
-    fig, ax = canvas(15, 8.4, "Arquitetura do plugin (dev.math.bclasses)",
+    fig, ax = canvas(15, 8.4, "Arquitetura do plugin (dev.math.hrclasses)",
                      "Linhas aproximadas de cada classe Java. Setas: quem cria ou chama quem.")
-    box(ax, 5.6, 6.0, 3.8, 1.3, "BabylonClasses", ["main, comandos, XP e niveis (400)"], LINE)
+    box(ax, 5.6, 6.0, 3.8, 1.3, "HardcoreRouletteClasses", ["main, comandos, XP e niveis (400)"], LINE)
     box(ax, 0.3, 3.4, 3.4, 1.6, "Engineer", ["torres, energia, rede,", "bancada, maquinas (2830)"], ENG)
     box(ax, 4.0, 3.4, 3.2, 1.6, "Explorer", ["chunks, companheiro,", "ancora, orbes (915)"], EXP)
     box(ax, 7.5, 3.4, 3.2, 1.6, "Farmer", ["Plantador de Cobre,", "colheita extra (430)"], FARM)
