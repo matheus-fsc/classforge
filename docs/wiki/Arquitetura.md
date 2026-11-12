@@ -44,3 +44,7 @@ python docs/diagrams.py
 ```
 
 Os numeros do script copiam as constantes do codigo. Ao mudar um balanceamento, ajuste o script e gere de novo.
+
+Os icones de itens e blocos saem das texturas do Minecraft instalado no PC: o script acha o jar do cliente mais novo em `.minecraft/versions` e extrai as texturas para `docs/.textures` (fora do git). Para escolher outro jar, use `MC_JAR=<caminho do jar>`; para gerar sem icones, `MC_TEXTURES=off`. O mapa de item para textura fica no dicionario `ICON` do script.
+
+As texturas do Minecraft sao da Mojang; aqui aparecem so como icones dentro dos diagramas.

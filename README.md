@@ -97,7 +97,7 @@ mvn package
 
 O jar sai em `target/HardcoreRouletteClasses.jar`. Copie para `plugins/`.
 
-Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib).
+Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib e do Minecraft instalado para os icones; detalhes em [Arquitetura](docs/wiki/Arquitetura.md)).
 
 ## Arquitetura
 
