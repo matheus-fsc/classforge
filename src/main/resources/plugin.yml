@@ -1,5 +1,5 @@
 name: Classforge
-version: 0.13.0
+version: 0.14.0
 main: dev.math.classforge.Classforge
 api-version: "26.3"
 author: matheus-fsc
@@ -9,9 +9,9 @@ softdepend: [HardcoreRoulette, AuraSkills]
 commands:
   classe:
     description: Abre o menu de habilidades
-    usage: /classe [info|particulas|reload|admin <jogador> <nivel> [exploracao|plantacao]|dar <item>|give <engenheiro|explorador|plantador|livros> [jogador]]
+    usage: /classe [info|particulas|reload|report|admin <jogador> <nivel> [exploracao|plantacao]|dar <item>|give <engenheiro|explorador|plantador|livros> [jogador]]
     aliases: [classes, class, classforge, engenharia, habilidades]
 permissions:
   classforge.admin:
-    description: Comandos de administracao (admin, dar, give, reload)
+    description: Comandos de administracao (admin, dar, give, reload, report)
     default: op

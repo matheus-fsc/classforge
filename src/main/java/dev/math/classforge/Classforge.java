@@ -79,7 +79,9 @@ public final class Classforge extends JavaPlugin implements Listener {
     public void onEnable() {
         migrateDataFolder();
         getDataFolder().mkdirs();
+        diag = new DiagLog(this);
         Settings.load(this);
+        diag.setDebug(getConfig().getBoolean("debug", false));
         playersFile = new File(getDataFolder(), "players.yml");
         loadPlayers();
         if (Settings.ENGINEERING) { engineer = new Engineer(this); engineer.enable(); }
@@ -95,8 +97,11 @@ public final class Classforge extends JavaPlugin implements Listener {
         for (Player p : Bukkit.getOnlinePlayers()) checkLife(p);
     }
 
+    DiagLog diag;
+
     @Override
     public void onDisable() {
+        if (diag != null) diag.close();
         if (engineer != null) { engineer.save(); engineer.clearTags(); engineer.tunnel.clear(); }
         if (farmer != null) farmer.save();
         if (explorer != null) explorer.save();
@@ -158,7 +163,6 @@ public final class Classforge extends JavaPlugin implements Listener {
     private final Map<String, Double> shareFrac = new HashMap<>();
 
     /** Repassa parte do XP para os membros da party no alcance (mesma fracao do XP do AuraSkills). */
-    @SuppressWarnings("unchecked")
     private void share(UUID from, int amount, int kind) {
         if (sharing || amount <= 0 || !Settings.PARTY_SHARE) return;
         Player p = Bukkit.getPlayer(from);
@@ -166,9 +170,9 @@ public final class Classforge extends JavaPlugin implements Listener {
         if (p == null || hr == null || !hr.isEnabled()) return;
         List<Player> to; double ratio;
         try {
-            to = (List<Player>) hr.getClass().getMethod("xpShareTargets", Player.class).invoke(hr, p);
-            ratio = (Double) hr.getClass().getMethod("xpShareRatio").invoke(hr);
-        } catch (Throwable t) { return; }
+            to = RouletteHook.shareTargets(p);
+            ratio = RouletteHook.shareRatio();
+        } catch (LinkageError old) { return; } // HardcoreRoulette antigo, sem a API
         if (to.isEmpty() || ratio <= 0) return;
         sharing = true;
         try {
@@ -291,8 +295,22 @@ public final class Classforge extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
+        if (a.length >= 1 && a[0].equalsIgnoreCase("report") && s.hasPermission("classforge.admin")) {
+            try {
+                java.io.File f = diag.report(s, List.of(
+                        "Modulos: engenharia=" + (engineer != null) + ", exploracao=" + (explorer != null)
+                                + ", plantacao=" + (farmer != null) + ", livros=" + (relics != null),
+                        "Mundos: " + Settings.WORLD_MODE + " " + Settings.WORLD_PREFIX + " " + Settings.WORLD_LIST,
+                        "Reset por mundo: " + Settings.RESET_ON_NEW_WORLD + ", party-share: " + Settings.PARTY_SHARE,
+                        "Jogadores com dados: " + players.size(),
+                        "HardcoreRoulette: " + (Bukkit.getPluginManager().isPluginEnabled("HardcoreRoulette") ? "ligado" : "ausente")));
+                s.sendMessage("Relatorio salvo em " + f.getPath() + ". Anexe esse arquivo no issue do GitHub.");
+            } catch (java.io.IOException ex) { s.sendMessage("Falha ao gerar o relatorio: " + ex.getMessage()); }
+            return true;
+        }
         if (a.length >= 1 && a[0].equalsIgnoreCase("reload") && s.hasPermission("classforge.admin")) {
             Settings.load(this);
+            diag.setDebug(getConfig().getBoolean("debug", false));
             s.sendMessage("config.yml recarregado. Receitas e modulos ligados/desligados so mudam reiniciando o servidor.");
             return true;
         }
@@ -429,7 +447,7 @@ public final class Classforge extends JavaPlugin implements Listener {
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
         if (a.length == 1) {
             List<String> o = new ArrayList<>(List.of("info", "particulas"));
-            if (s.hasPermission("classforge.admin")) { o.add("admin"); o.add("dar"); o.add("give"); o.add("reload"); }
+            if (s.hasPermission("classforge.admin")) { o.add("admin"); o.add("dar"); o.add("give"); o.add("reload"); o.add("report"); }
             return o;
         }
         if (a.length == 2 && a[0].equalsIgnoreCase("dar")) { List<String> o = new ArrayList<>(Arrays.asList(Engineer.TYPES)); o.add("ancora"); o.add("plantador"); return o; }

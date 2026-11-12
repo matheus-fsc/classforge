@@ -1,6 +1,6 @@
 # Classforge
 
-![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.13.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
+![Paper](https://img.shields.io/badge/Paper-26.3-blue) ![Java](https://img.shields.io/badge/Java-25-orange) ![Versao](https://img.shields.io/badge/versao-0.14.0-green) ![Licenca](https://img.shields.io/badge/licenca-MIT-lightgrey)
 
 Plugin Paper de **habilidades por nivel** sem classes fixas. Todo jogador sobe Engenharia, Exploracao e Plantacao, e o nivel de cada uma libera conteudo novo: torres de defesa, energia e maquinas, companheiros e teleporte, plantadores automaticos e livros encantados raros. Tudo e configuravel (mundos, modulos, balanceamento e receitas). Mensagens em portugues (pt-BR).
 
@@ -43,7 +43,7 @@ Sem o HardcoreRoulette, essas funcoes ficam desligadas e o resto funciona igual.
 | [Exploracao](docs/wiki/Exploracao.md) | Companheiro, Ancora de Perola, orbes, Livros Antigos |
 | [Arquitetura](docs/wiki/Arquitetura.md) | Classes Java, dados, geracao dos diagramas |
 
-## Estado atual (versao 0.13.0)
+## Estado atual (versao 0.14.0)
 
 | Area | Estado | Observacao |
 |------|--------|------------|
@@ -55,6 +55,7 @@ Sem o HardcoreRoulette, essas funcoes ficam desligadas e o resto funciona igual.
 | Exploracao: Livros Antigos (12) | Novo, sem teste em jogo | Loot de baus de estrutura |
 | Plantacao: Plantador de Cobre | Pronto | Receita visivel no painel |
 | Integracao com o HardcoreRoulette | Pronto | Vida por mundo e XP dividido com a party |
+| Logs e `/classe report` | Pronto | Log diario em `logs/`, relatorio sem segredos para issues |
 | Configuracao (config.yml) | Pronto | Mundos, modulos, balanceamento, receitas, `/classe reload` |
 
 Ideias em aberto: habilidade de Coleta, revisao de balanceamento depois de uma run completa.
@@ -110,6 +111,14 @@ Tudo que era fixo no codigo agora fica em `plugins/Classforge/config.yml`, escri
 
 O padrao de uma instalacao nova e o de servidor comum: `worlds.mode: all` e `progress.reset-on-new-world: false`. Para o HardcoreRoulette, veja a secao de integracao.
 
+## Reportar um problema
+
+1. Rode `/classe report` (precisa da permissao `classforge.admin`; no console tambem funciona).
+2. O plugin cria `plugins/Classforge/reports/report-<data>.txt` com a versao do plugin e do servidor, os plugins instalados, o `config.yml` sem segredos e as ultimas linhas do log.
+3. Abra um [issue](https://github.com/matheus-fsc/classforge/issues/new/choose) e anexe o arquivo.
+
+O log completo fica em `plugins/Classforge/logs/` (um arquivo por dia, guardado por 7 dias). Para investigar algo especifico, ligue `debug: true` no config.yml e rode `/classe reload`.
+
 ## Comandos
 
 | Comando | Descricao |
@@ -120,13 +129,14 @@ O padrao de uma instalacao nova e o de servidor comum: `worlds.mode: all` e `pro
 | `/classe admin <jogador> <nivel>` | Define o nivel (permissao `classforge.admin`) |
 | `/classe dar <item>` | Da um item do plugin (permissao `classforge.admin`) |
 | `/classe reload` | Recarrega o config.yml (permissao `classforge.admin`) |
+| `/classe report` | Gera um relatorio para anexar num issue (permissao `classforge.admin`) |
 | `/classe give <engenheiro\|explorador\|plantador\|livros> [jogador]` | Kit de teste; `livros` da um de cada Livro Antigo (permissao `classforge.admin`) |
 
 ## Permissoes
 
 | Permissao | Padrao | Descricao |
 |-----------|--------|-----------|
-| `classforge.admin` | op | `/classe admin`, `/classe dar` e `/classe give` |
+| `classforge.admin` | op | `/classe admin`, `dar`, `give`, `reload` e `report` |
 
 ## Build
 
@@ -135,6 +145,8 @@ mvn package
 ```
 
 O jar sai em `target/Classforge.jar`. Copie para `plugins/`.
+
+A integracao usa a API do HardcoreRoulette como dependencia opcional: antes de compilar, rode `mvn install` no repositorio do [HardcoreRoulette](https://github.com/matheus-fsc/hardcore-roulette).
 
 Para gerar os diagramas de novo: `python docs/diagrams.py` (precisa de matplotlib e do Minecraft instalado para os icones; detalhes em [Arquitetura](docs/wiki/Arquitetura.md)).
 

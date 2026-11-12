@@ -27,6 +27,14 @@
       <version>26.3.build.241-stable</version>
       <scope>provided</scope>
     </dependency>
+    <!-- Opcional: API do HardcoreRoulette (rode "mvn install" no hardcore-roulette antes). -->
+    <dependency>
+      <groupId>dev.math</groupId>
+      <artifactId>HardcoreRoulette</artifactId>
+      <version>1.2.0</version>
+      <scope>provided</scope>
+      <optional>true</optional>
+    </dependency>
   </dependencies>
 
   <build>

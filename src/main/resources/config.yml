@@ -9,6 +9,10 @@
 # Curva de XP (level-xp) padrao: xp(n) = MAX x (0.1 x t + 0.9 x t^4), com t = (n - 1) / 4.
 # Comeco suave (a parte linear nunca deixa a subida zerar) e angulo forte nos niveis 4 e 5.
 
+# Log detalhado em plugins/Classforge/logs (ligue so para investigar um problema).
+# /classe report gera um relatorio para anexar num issue.
+debug: false
+
 # Em quais mundos as habilidades valem (XP, loot de livros, regras de vida).
 # Com o HardcoreRoulette: mode: prefix, prefix: "hc_" e progress.reset-on-new-world: true.
 worlds:
